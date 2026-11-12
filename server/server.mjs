@@ -29,7 +29,7 @@ const promptIdleTimeoutMs = milliseconds("prompt-idle-timeout-ms", 600_000, 100)
 const promptAbsoluteTimeoutMs = milliseconds("prompt-absolute-timeout-ms", 1_800_000, 1_000);
 const shutdownGraceMs = milliseconds("shutdown-grace-ms", 5_000, 0);
 const shutdownDeadlineMs = milliseconds("shutdown-deadline-ms", 12_000, 1_000);
-if (shutdownDeadlineMs < shutdownGraceMs + 4_000) throw new Error("--shutdown-deadline-ms must exceed --shutdown-grace-ms by at least 4000 ms.");
+if (shutdownDeadlineMs < shutdownGraceMs + 5_000) throw new Error("--shutdown-deadline-ms must exceed --shutdown-grace-ms by at least 5000 ms.");
 const agents = agentsPath ? JSON.parse(await readFile(resolve(root, agentsPath), "utf8")) : null;
 if (agents !== null && !Array.isArray(agents)) throw new Error("Agent configuration must be a JSON array.");
 const hub = new Hub({

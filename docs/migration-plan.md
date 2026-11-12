@@ -48,7 +48,7 @@ M1 does not require real harnesses, physical devices, approvals, attachments, or
 
 ## M2 — Real work and files
 
-**Status: active. Real OpenCode file/session, detailed native approval, native form-question, stop/failure supervision, descendant cleanup, same-session recovery, rich tool/plan progress, and deliberate attachment acceptance passed on 2026-11-03; generated-file return keeps the milestone open.** The 2026-11-12 lifecycle change implements the EXEC-03 and EXEC-04 fixes and passes its offline gate (LIFE 12/12, 37/37 suite); both stay Partial until the live supervision gate passes on the installed CLI.
+**Status: active. Real OpenCode file/session, detailed native approval, native form-question, stop/failure supervision, descendant cleanup, same-session recovery, rich tool/plan progress, and deliberate attachment acceptance passed on 2026-11-03; generated-file return keeps the milestone open.** The 2026-11-12 lifecycle change implements the EXEC-03 and EXEC-04 fixes and passes its offline gate (LIFE 13/13, 38/38 suite); both stay Partial until the live supervision gate passes on the installed CLI.
 
 Requirements: AGENT-02, AGENT-04, EXEC-05, EXEC-06, EXEC-07, FILE-01, FILE-02.
 

@@ -35,6 +35,7 @@ export class AcpClient {
     this.buffer = "";
     this.stderr = "";
     this.startPromise = null;
+    this.stopPromise = null;
   }
 
   #clearTimers(entry) {
@@ -309,7 +310,13 @@ export class AcpClient {
     }
   }
 
-  async stop() {
+  stop() {
+    if (this.stopPromise) return this.stopPromise;
+    this.stopPromise = this.#stopInternal().finally(() => { this.stopPromise = null; });
+    return this.stopPromise;
+  }
+
+  async #stopInternal() {
     const child = this.child;
     this.child = null;
     this.startPromise = null;

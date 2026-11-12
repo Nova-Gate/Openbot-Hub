@@ -23,6 +23,8 @@ export class AgentRuntime {
     this.onNotification = onNotification;
     this.options = { requestTimeoutMs, promptIdleTimeoutMs, promptAbsoluteTimeoutMs, cancelGraceMs };
     this.clients = new Map();
+    this.retiring = new Map();
+    this.retirementFailures = [];
     this.queues = new Map();
     this.cancellations = new Set();
     this.active = new Map();
@@ -143,13 +145,24 @@ export class AgentRuntime {
     await client.start();
   }
 
-  async retireClient(agentId) {
+  retireClient(agentId) {
+    const inFlight = this.retiring.get(agentId);
+    if (inFlight) return inFlight;
     const client = this.clients.get(agentId);
-    if (!client) return;
+    if (!client) return Promise.resolve();
     this.clients.delete(agentId);
     const active = this.active.get(agentId);
     if (active) client.cancel(active.sessionId);
-    await client.stop().catch(() => {});
+    let stop;
+    stop = client.stop()
+      .catch((error) => {
+        this.retirementFailures.push({ agentId, error });
+      })
+      .finally(() => {
+        if (this.retiring.get(agentId) === stop) this.retiring.delete(agentId);
+      });
+    this.retiring.set(agentId, stop);
+    return stop;
   }
 
   async interrupt(agentId) {
@@ -174,9 +187,20 @@ export class AgentRuntime {
     }
     const clients = [...this.clients.values()];
     this.clients.clear();
-    await Promise.all(clients.map((client) => client.stop().catch(() => {})));
+    await Promise.all(clients.map((client) => client.stop().catch((error) => {
+      this.retirementFailures.push({ agentId: "shutdown", error });
+    })));
+    const cleanupDeadline = Date.now() + 15_000;
+    while (this.retiring.size) {
+      if (Date.now() > cleanupDeadline) throw new Error("Client retirement did not finish within the cleanup deadline.");
+      await Promise.allSettled([...this.retiring.values()]);
+    }
     this.queues.clear();
     this.active.clear();
+    if (this.retirementFailures.length) {
+      const first = this.retirementFailures[0];
+      throw new Error(`Client cleanup failed for ${this.retirementFailures.length} agent(s): ${first.error?.message ?? first.error}`);
+    }
   }
 
   async stop() {

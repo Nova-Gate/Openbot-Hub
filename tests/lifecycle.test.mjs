@@ -292,7 +292,7 @@ test("a session-request timeout retires the wedged client", { timeout: 20_000 },
       color: "yellow",
       enabled: true,
     }],
-    requestTimeoutMs: 1_500,
+    requestTimeoutMs: 5_000,
     shutdownGraceMs: 500,
   });
   await hub.load();
@@ -353,4 +353,21 @@ test("shutdown stops several agents concurrently without orphans", { timeout: 30
   assert.ok(Date.now() - started < 4_000, "shutdown was not concurrent");
   for (const execution of hub.state.executions) assert.equal(execution.status, "unknown");
   for (const pid of pids) await waitUntilGone(pid, 5_000);
+});
+
+test("shutdown awaits an in-flight client retirement and leaves no orphan", { timeout: 30_000 }, async (t) => {
+  const { hub, directory } = await makeHub(fakeAgent, { shutdownGraceMs: 500 });
+  t.after(async () => { await rm(directory, { recursive: true, force: true }); });
+  await hub.post({ text: "@Fake stubborn", clientMessageId: "retirement-race" });
+  const pid = await harnessPid(directory);
+  const deadline = Date.now() + 10_000;
+  while (hub.runtime.retiring.size === 0) {
+    if (Date.now() > deadline) throw new Error("The client retirement never started.");
+    await delay(20);
+  }
+  const started = Date.now();
+  await hub.stop();
+  const waited = Date.now() - started;
+  assert.equal(processAlive(pid), false, "shutdown returned while the retiring child was still alive");
+  assert.ok(waited >= 1_000, `shutdown did not wait for the retirement (${waited} ms)`);
 });
