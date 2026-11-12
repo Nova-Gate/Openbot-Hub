@@ -124,7 +124,8 @@ A repeated client message ID returns the original receipt and starts no new exec
 - `unknown` is a distinct outcome, not a synonym for `failed`: the side effect may already have happened. It is surfaced in the room, never retried automatically, and must be reconciled before resending. A failure that provably happened before dispatch is the only kind eligible for safe retry, and today that means the existing `-32010` rule.
 - Prompt timeouts are idle-based and reset on every `session/update`, are paused while a decision is pending, and are bounded by an absolute cap. On timeout the Hub sends `session/cancel`, waits a short grace, then kills the process group, and records `unknown` because the turn may have run.
 - A transport loss after dispatch records `unknown`; a failure proven to occur before dispatch records `failed`. Retry safety is unchanged and still requires `-32010`.
-- Shutdown stops accepting work, marks queued runs `interrupted` and running or waiting runs `unknown`, resolves pending approvals, cancels active prompts, waits a bounded grace, kills process groups, and persists terminal state before exiting. SIGTERM has a hard deadline independent of that grace.
+- Shutdown stops accepting work, marks queued runs `interrupted` and running or waiting runs `unknown`, resolves pending approvals, cancels active prompts, waits a bounded grace, kills process groups concurrently, and persists terminal state before exiting. SIGTERM has a hard deadline independent of that grace.
+- A prompt that times out completes its cancellation and process cleanup before the per-agent queue releases, so a follow-up turn cannot overlap the timed-out native turn. A fatal client failure retires the client through one path instead of retaining or dropping it.
 
 ## Workspace and tool rules
 

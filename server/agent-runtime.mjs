@@ -105,6 +105,7 @@ export class AgentRuntime {
       } catch (error) {
         error.dispatched = false;
         error.outcomeUnknown = false;
+        if (error.fatal) await this.retireClient(agentId);
         throw error;
       }
       if (actualSession !== sessionId) await this.onSession(agentId, actualSession);
@@ -112,7 +113,8 @@ export class AgentRuntime {
       try {
         return await client.prompt(actualSession, text, attachments);
       } catch (error) {
-        if (error.fatal) this.clients.delete(agentId);
+        if (error.cleanup) { try { await error.cleanup; } catch {} }
+        if (error.fatal) await this.retireClient(agentId);
         throw error;
       } finally {
         this.active.delete(agentId);
@@ -141,22 +143,22 @@ export class AgentRuntime {
     await client.start();
   }
 
-  async interrupt(agentId) {
+  async retireClient(agentId) {
     const client = this.clients.get(agentId);
     if (!client) return;
     this.clients.delete(agentId);
-    await client.stop();
+    const active = this.active.get(agentId);
+    if (active) client.cancel(active.sessionId);
+    await client.stop().catch(() => {});
+  }
+
+  async interrupt(agentId) {
+    await this.retireClient(agentId);
   }
 
   async stopAgent(agentId) {
-    const client = this.clients.get(agentId);
-    const active = this.active.get(agentId);
-    if (client) {
-      if (active) client.cancel(active.sessionId);
-      this.clients.delete(agentId);
-      await client.stop();
-    }
     this.queues.delete(agentId);
+    await this.retireClient(agentId);
   }
 
   async shutdown({ graceMs = 5_000 } = {}) {
@@ -164,10 +166,9 @@ export class AgentRuntime {
     for (const [agentId, active] of this.active) this.clients.get(agentId)?.cancel(active.sessionId);
     const inFlight = [...this.queues.values()].map((queue) => queue.catch(() => {}));
     await Promise.race([Promise.allSettled(inFlight), delay(graceMs)]);
-    for (const [agentId, client] of [...this.clients]) {
-      this.clients.delete(agentId);
-      await client.stop().catch(() => {});
-    }
+    const clients = [...this.clients.values()];
+    this.clients.clear();
+    await Promise.all(clients.map((client) => client.stop().catch(() => {})));
     this.queues.clear();
     this.active.clear();
   }

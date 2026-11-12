@@ -36,7 +36,7 @@ npm run test:opencode  # live file/session gate; two small model calls
 npm run test:opencode-supervision  # live question/approval/stop/failure gate; five model calls
 ```
 
-`tests/lifecycle.test.mjs` covers idle and absolute prompt timeouts, pre-dispatch versus post-dispatch failure classification, approval-paused timers, shutdown terminal states, orphan cleanup, and a real SIGTERM deadline. Server lifecycle defaults are `--prompt-idle-timeout-ms 600000`, `--prompt-absolute-timeout-ms 1800000`, `--approval-timeout-ms 600000`, `--shutdown-grace-ms 5000`, and `--shutdown-deadline-ms 8000`; `--request-timeout-ms` bounds handshake and session requests.
+`tests/lifecycle.test.mjs` covers idle and absolute prompt timeouts with cancellation and process-group kill, a queued follow-up that cannot start until the timed-out process exits, pre-dispatch versus post-dispatch failure classification, approval-paused timers, wedged-client retirement after a session timeout or a malformed stream, waiting-approval shutdown, concurrent multi-agent shutdown, orphan cleanup, and a real SIGTERM deadline with exit code 0. Server lifecycle defaults are `--prompt-idle-timeout-ms 600000`, `--prompt-absolute-timeout-ms 1800000`, `--approval-timeout-ms 600000`, `--shutdown-grace-ms 5000`, and `--shutdown-deadline-ms 12000`; `--request-timeout-ms` bounds handshake and session requests.
 
 The browser command starts an isolated temporary server on a random port, uses separate runtime state, exercises the real file input through Chrome, verifies attachment chips, room locking, message metadata, exact downloads, agent-received bytes, and 390 px layout, then covers pending/completed progress, command/output, plans, failures, visible permission details, and native question accept/decline flows. It writes screenshots and a report under `artifacts/ui-validation/` and stops its temporary processes. It does not replace the persistent service or modify its state. GitHub Actions runs `npm run check` and `npm test` for every pull request and push to `main`; browser and live provider tests remain local acceptance gates.
 
@@ -84,7 +84,7 @@ The integration tests verify:
 
 Every acceptance report must record the commit SHA, the run date, the Node version, and the OpenCode CLI version it exercised.
 
-Set `OPENCODE_CLI=/full/path/to/opencode-cli` when the installed CLI differs from this Mac's default `~/Library/Application Support/ai.opencode.desktop/cli/2.0.26/opencode-cli`. Both scripts create isolated roots under ignored `.runtime/`, start the actual Hub API with one `local-opencode` agent, stop temporary app processes, and remove their disposable roots. Evidence covers task artifacts inside each isolated acceptance root; it is not an operating-system sandbox and does not prohibit OpenCode's own provider profile or native session storage elsewhere.
+Both scripts resolve the newest installed CLI under `~/Library/Application Support/ai.opencode.desktop/cli/*/opencode-cli`, or use `OPENCODE_CLI=/full/path/to/opencode-cli` when set. Both scripts create isolated roots under ignored `.runtime/`, start the actual Hub API with one `local-opencode` agent, stop temporary app processes, and remove their disposable roots. Evidence covers task artifacts inside each isolated acceptance root; it is not an operating-system sandbox and does not prohibit OpenCode's own provider profile or native session storage elsewhere.
 
 ### Files and durable sessions
 

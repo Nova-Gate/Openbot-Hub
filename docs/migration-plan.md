@@ -25,7 +25,7 @@ Limits: fake agents only; the demo Dell node runs on the Mini; phone evidence is
 
 ## M1 — Supervision and room completion
 
-**Status: complete. Exit gate passed on 2026-11-02 with CHECK, APP, ACP, SUP, and UI evidence.**
+**Status: exit gate passed on 2026-11-02 with CHECK, APP, ACP, SUP, and UI evidence; reopened for EXEC-03 on 2026-11-12 (Partial until the live supervision gate passes).**
 
 Requirements: ROOM-03, AGENT-03, EXEC-01, EXEC-02, EXEC-03, EXEC-04.
 
@@ -48,7 +48,7 @@ M1 does not require real harnesses, physical devices, approvals, attachments, or
 
 ## M2 — Real work and files
 
-**Status: active. Real OpenCode file/session, detailed native approval, native form-question, stop/failure supervision, descendant cleanup, same-session recovery, rich tool/plan progress, and deliberate attachment acceptance passed on 2026-11-03; generated-file return keeps the milestone open.** The 2026-11-12 lifecycle change implements the EXEC-03 and EXEC-04 fixes and passes its offline gate (LIFE 6/6, 31/31 suite); both stay Partial until the live supervision gate passes on the installed CLI.
+**Status: active. Real OpenCode file/session, detailed native approval, native form-question, stop/failure supervision, descendant cleanup, same-session recovery, rich tool/plan progress, and deliberate attachment acceptance passed on 2026-11-03; generated-file return keeps the milestone open.** The 2026-11-12 lifecycle change implements the EXEC-03 and EXEC-04 fixes and passes its offline gate (LIFE 12/12, 37/37 suite); both stay Partial until the live supervision gate passes on the installed CLI.
 
 Requirements: AGENT-02, AGENT-04, EXEC-05, EXEC-06, EXEC-07, FILE-01, FILE-02.
 

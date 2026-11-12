@@ -173,13 +173,14 @@ export class AcpClient {
     if (!entry?.prompt) return;
     this.pending.delete(id);
     this.#clearTimers(entry);
+    const cleanup = this.#abort(entry.sessionId);
+    cleanup.catch(() => {});
     entry.reject(failure(
       absolute
         ? "The prompt exceeded its absolute time limit; it may still have run, so its outcome is unknown."
         : "The agent stopped making progress and the prompt timed out; it may still have run, so its outcome is unknown.",
-      { dispatched: true, outcomeUnknown: true, prompt: true, timeout: true, fatal: true, sessionId: entry.sessionId },
+      { dispatched: true, outcomeUnknown: true, prompt: true, timeout: true, fatal: true, sessionId: entry.sessionId, cleanup },
     ));
-    void this.#abort(entry.sessionId);
   }
 
   async #abort(sessionId) {
@@ -212,7 +213,7 @@ export class AcpClient {
       const entry = { resolve, reject, dispatched: false, prompt: false };
       entry.timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(failure(`${method} timed out: ${this.stderr}`, { dispatched: false, fatal: true }));
+        reject(failure(`${method} timed out: ${this.stderr}`, { dispatched: entry.dispatched, fatal: true }));
       }, this.requestTimeoutMs);
       this.pending.set(id, entry);
       try {

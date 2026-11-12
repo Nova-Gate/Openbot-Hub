@@ -180,6 +180,10 @@ const handlers = {
     const promptLock = acquirePromptLock();
     const releasePromptLock = () => { if (promptLock) rmSync(promptLock, { force: true }); };
     if (/\bexit-mid-turn\b/.test(text)) process.exit(1);
+    if (/\bgarble\b/.test(text)) {
+      process.stdout.write("this is not json\n");
+      return;
+    }
     if (/\bhang\b/.test(text)) return;
     session.simulatedFailures ??= [];
     if (text.includes("fail-once") && !session.simulatedFailures.includes(text)) {

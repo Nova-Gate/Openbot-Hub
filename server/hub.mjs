@@ -500,6 +500,7 @@ export class Hub {
   }
 
   async post({ text, clientMessageId, roomId = "army", attachmentIds = [] }) {
+    if (this.stopping) throw problem("The hub is shutting down; no new work can be queued.", 503);
     const messageText = clean(text);
     if (!messageText) throw problem("Message text is required.");
     if (messageText.length > 16_000) throw problem("Message is too long.", 413);
@@ -923,8 +924,18 @@ export class Hub {
     }
     for (const timer of this.approvalTimers.values()) clearTimeout(timer);
     this.approvalTimers.clear();
-    if (queued.length || active.length) await this.save().catch(() => {});
+    let saveError = null;
+    const persist = async () => {
+      try {
+        await this.save();
+        await this.saveQueue;
+      } catch (error) {
+        saveError ??= error;
+      }
+    };
+    await persist();
     await this.runtime.shutdown({ graceMs: this.shutdownGraceMs });
-    await this.saveQueue.catch(() => {});
+    await persist();
+    if (saveError) throw new Error(`Terminal execution state could not be persisted: ${redactError(saveError.message)}`);
   }
 }
