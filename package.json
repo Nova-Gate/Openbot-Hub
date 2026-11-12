@@ -16,6 +16,6 @@
     "test:ui": "node scripts/validate-ui.mjs",
     "test:opencode": "node scripts/accept-opencode.mjs",
     "test:opencode-supervision": "node scripts/accept-opencode-supervision.mjs",
-    "check": "node --check server/acp-client.mjs && node --check server/elicitation.mjs && node --check server/execution-events.mjs && node --check server/redact.mjs && node --check server/agent-runtime.mjs && node --check server/hub.mjs && node --check server/server.mjs && node --check connectors/remote-acp/fake-harness.mjs && node --check connectors/remote-acp/node-server.mjs && node --check connectors/remote-acp/proxy.mjs && node --check scripts/dev.mjs && node --check scripts/validate-ui.mjs && node --check scripts/accept-opencode.mjs && node --check scripts/accept-opencode-supervision.mjs && node --check web/app.js"
+    "check": "node --check server/acp-client.mjs && node --check server/attachments.mjs && node --check server/elicitation.mjs && node --check server/execution-events.mjs && node --check server/redact.mjs && node --check server/agent-runtime.mjs && node --check server/hub.mjs && node --check server/server.mjs && node --check connectors/remote-acp/fake-harness.mjs && node --check connectors/remote-acp/lib.mjs && node --check connectors/remote-acp/node-server.mjs && node --check connectors/remote-acp/proxy.mjs && node --check scripts/dev.mjs && node --check scripts/validate-ui.mjs && node --check scripts/accept-opencode.mjs && node --check scripts/accept-opencode-supervision.mjs && node --check web/app.js"
   }
 }

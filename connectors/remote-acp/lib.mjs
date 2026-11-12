@@ -31,3 +31,17 @@ export function textFromPrompt(prompt) {
   const texts = blocks.filter((block) => block?.type === "text" && typeof block.text === "string");
   return texts.at(-1)?.text ?? "";
 }
+
+export function attachmentsFromPrompt(prompt) {
+  const blocks = Array.isArray(prompt) ? prompt : [];
+  return blocks.filter((block) => block?._meta?.attachmentId).map((block) => {
+    const id = block._meta.attachmentId;
+    if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error("Attachment identity is invalid.");
+    let content;
+    if (block.type === "resource" && typeof block.resource?.text === "string") content = Buffer.from(block.resource.text, "utf8");
+    else if (block.type === "resource" && typeof block.resource?.blob === "string") content = Buffer.from(block.resource.blob, "base64");
+    else if (block.type === "image" && typeof block.data === "string") content = Buffer.from(block.data, "base64");
+    else throw new Error("Attachment content block is invalid.");
+    return { id, content };
+  });
+}

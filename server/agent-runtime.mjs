@@ -73,7 +73,7 @@ export class AgentRuntime {
     await this.onNotification({ agentId, executionId: active.executionId, sessionId: active.sessionId, params });
   }
 
-  run(agentId, sessionId, text, { executionId, onStart = async () => {} } = {}) {
+  run(agentId, sessionId, text, { executionId, attachments = [], onStart = async () => {} } = {}) {
     const previous = this.queues.get(agentId) ?? Promise.resolve();
     const next = previous.then(async () => {
       if (this.cancellations.has(executionId)) return { cancelled: true };
@@ -87,7 +87,7 @@ export class AgentRuntime {
       if (actualSession !== sessionId) await this.onSession(agentId, actualSession);
       this.active.set(agentId, { executionId, sessionId: actualSession });
       try {
-        return await client.prompt(actualSession, text);
+        return await client.prompt(actualSession, text, attachments);
       } finally {
         this.active.delete(agentId);
       }

@@ -86,8 +86,21 @@ const jsonOptions = (method, value) => ({
   body: JSON.stringify(value),
 });
 
-async function runPrompt(text, clientMessageId) {
-  const posted = await request("/api/messages", jsonOptions("POST", { text, clientMessageId, roomId: "army" }));
+async function uploadSource() {
+  return request("/api/rooms/army/attachments", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-Attachment-Name": "source.txt",
+      "X-Attachment-Media-Type": "text/plain",
+      "X-Client-Attachment-Id": "opencode-real-source",
+    },
+    body: `${marker}\n`,
+  });
+}
+
+async function runPrompt(text, clientMessageId, attachmentIds = []) {
+  const posted = await request("/api/messages", jsonOptions("POST", { text, clientMessageId, roomId: "army", attachmentIds }));
   assert.deepEqual(posted.recipients, [definition.id]);
   const executionId = posted.executions[0].id;
   return withTimeout((async () => {
@@ -122,10 +135,15 @@ try {
   const health = await request("/api/agents/opencode-real/test", { method: "POST" });
   assert.equal(health.status, "available", health.error);
 
-  const first = await runPrompt(
-    `@OpenCode Real Create evidence.txt in the current workspace containing exactly ${marker} followed by a newline. Do not create or modify any other file. Then reply with exactly OPENBOT_REAL_DONE and nothing else.`,
-    "opencode-real-file-task",
-  );
+  const uploaded = await uploadSource();
+  const attachmentId = uploaded.attachment.id;
+  const firstPrompt = "@OpenCode Real Read the attached source.txt ACP embedded resource. Its text content is inlined directly after the openbot-hub URI in this same user message; that inlined text is the attachment content, not an MCP resource reference. Do not call MCP resource tools. Create evidence.txt in the current workspace containing exactly the token from that inlined attachment text followed by a newline. The token is deliberately absent from these instructions, so obtain it from the attached resource content. Do not create or modify any other file. Then reply with exactly OPENBOT_REAL_DONE and nothing else.";
+  assert.equal(firstPrompt.includes(marker), false);
+  const first = await runPrompt(firstPrompt, "opencode-real-file-task", [attachmentId]);
+  const firstOrigin = first.state.messages.find((message) => message.id === first.execution.originId);
+  assert.equal(firstOrigin.text.includes(marker), false);
+  assert.equal(firstOrigin.attachments[0].id, attachmentId);
+  assert.equal(firstOrigin.attachments[0].sha256, uploaded.attachment.sha256);
   assert.equal(first.reply.originId, first.execution.originId);
   assert.equal(first.execution.agentId, definition.id);
   assert.equal(first.execution.roomId, "army");
@@ -136,13 +154,12 @@ try {
   assert.equal(first.reply.text.trim(), "OPENBOT_REAL_DONE");
   const realTools = first.execution.events.filter((event) => event.kind === "tool");
   assert.ok(realTools.length > 0, "Real OpenCode file work must emit tool progress");
-  const completedTool = realTools.find((event) => event.status === "completed" && (event.operation.rawOutput !== undefined || event.operation.content !== undefined));
-  assert.ok(completedTool, "A real OpenCode tool must complete with result evidence");
+  const completedTool = realTools.find((event) => event.status === "completed" && (event.operation.rawOutput !== undefined || event.operation.content !== undefined) && /evidence\.txt/.test(JSON.stringify(event.operation)));
+  assert.ok(completedTool, "The real OpenCode evidence-file tool must complete with result evidence");
   assert.ok(realTools.every((event) => event.nodeId === definition.nodeId), "Real tool events must use the authoritative execution node");
-  assert.match(JSON.stringify(completedTool.operation), /evidence\.txt/);
   assert.equal(await readFile(join(workspace, "evidence.txt"), "utf8"), `${marker}\n`);
   assert.deepEqual(await filesBelow(workspace), ["evidence.txt"]);
-  assert.deepEqual(await filesBelow(control), ["agents.json", "hub-state.json", "outside-guard.txt"]);
+  assert.deepEqual(await filesBelow(control), ["agents.json", `attachments/${attachmentId}`, "hub-state.json", "outside-guard.txt"]);
   assert.equal(await readFile(guardPath, "utf8"), "No OpenCode task artifact may replace this file.\n");
   const persistedBefore = JSON.parse(await readFile(statePath, "utf8"));
   const persistedDefinition = persistedBefore.agentDefinitions.find((agent) => agent.id === definition.id);
@@ -166,16 +183,17 @@ try {
   const persistedAfter = JSON.parse(await readFile(statePath, "utf8"));
   assert.equal(persistedAfter.agents.find((agent) => agent.id === definition.id)?.sessionId, sessionBefore);
   assert.deepEqual(await filesBelow(workspace), ["evidence.txt"]);
-  assert.deepEqual(await filesBelow(control), ["agents.json", "hub-state.json", "hub-state.json.load-backup", "outside-guard.txt"]);
+  assert.deepEqual(await filesBelow(control), ["agents.json", `attachments/${attachmentId}`, "hub-state.json", "hub-state.json.load-backup", "outside-guard.txt"]);
   assert.equal(await readFile(guardPath, "utf8"), "No OpenCode task artifact may replace this file.\n");
 
   const report = {
     ok: true,
-    requirements: ["AGENT-02", "AGENT-04", "EXEC-02", "EXEC-06", "EXEC-07"],
+    requirements: ["AGENT-02", "AGENT-04", "EXEC-02", "EXEC-06", "EXEC-07", "FILE-01"],
     adapter: "local-opencode",
     realModelCalls: 2,
     connectivity: health.status,
     nativeFileEvidence: true,
+    attachmentResourceDelivery: { attachmentId, markerAbsentFromPrompt: true, exactTokenWritten: true, storedByUuid: true },
     realToolProgress: { count: realTools.length, completedWithResult: true, nodeId: completedTool.nodeId, replayDuplicates: 0 },
     workspaceOnlyTaskArtifacts: true,
     executionIdentity: { agentId: first.reply.authorId, nodeId: first.reply.nodeId, roomId: first.execution.roomId },

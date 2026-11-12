@@ -2,9 +2,9 @@
 
 ## Status
 
-The local proof of concept has passed automated connector and web-application integration tests, plus desktop and 390 px mobile browser checks. These cover portions of ACP-02/03/04/06/07/08, TEAM-01/02, MOBILE-04, and the responsive interface using fake agents on one physical Mac. Separate disposable acceptance gates have passed for real local OpenCode native files, durable sessions, detailed native permission approval, a real `elicitation/create` form question, active stop, induced provider failure, descendant cleanup, and same-session recovery.
+The local proof of concept has passed automated connector and web-application integration tests, plus desktop and 390 px mobile browser checks. These cover portions of ACP-02/03/04/06/07/08, TEAM-01/02, MOBILE-04, and the responsive interface using fake agents on one physical Mac. Deliberate attachment upload, integrity, local/remote byte delivery, verified download, deletion cleanup, and mobile-width composition have also passed. Separate disposable acceptance gates have passed for real local OpenCode native files, embedded-resource attachment delivery, durable sessions, detailed native permission approval, a real `elicitation/create` form question, active stop, induced provider failure, descendant cleanup, and same-session recovery.
 
-Physical multi-machine execution, secure phone-network access, attachments, generated-file return, delegation, and production security remain pending or only partially covered. Real OpenCode evidence does not establish acceptance for other harnesses or physical nodes. This document remains the evidence checklist for the full gates.
+Physical multi-machine execution, secure phone-network access, generated-file return, delegation, and production security remain pending or only partially covered. Real OpenCode evidence does not establish acceptance for other harnesses or physical nodes. This document remains the evidence checklist for the full gates.
 
 ## Evidence rules
 

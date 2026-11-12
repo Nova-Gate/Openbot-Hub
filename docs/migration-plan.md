@@ -48,7 +48,7 @@ M1 does not require real harnesses, physical devices, approvals, attachments, or
 
 ## M2 — Real work and files
 
-**Status: active. Real OpenCode file/session, detailed native approval, native form-question, stop/failure supervision, descendant cleanup, same-session recovery, and rich tool/plan progress acceptance passed on 2026-11-03; file exchange keeps the milestone open.**
+**Status: active. Real OpenCode file/session, detailed native approval, native form-question, stop/failure supervision, descendant cleanup, same-session recovery, rich tool/plan progress, and deliberate attachment acceptance passed on 2026-11-03; generated-file return keeps the milestone open.**
 
 Requirements: AGENT-02, AGENT-04, EXEC-05, EXEC-06, EXEC-07, FILE-01, FILE-02.
 
@@ -59,14 +59,15 @@ Requirements: AGENT-02, AGENT-04, EXEC-05, EXEC-06, EXEC-07, FILE-01, FILE-02.
 - **Done:** Round-trip native `elicitation/create` form questions and permission approvals with explicit pending/terminal states, complete safely rendered operation details, expiry, waiting stop, wrong-session rejection, and restart recovery.
 - **Done:** Verify real OpenCode active stop, induced provider-crash failure, descendant process cleanup, and subsequent execution in the same native session.
 - **Done:** Render durable tool calls, plans, results, and failures with node attribution; prove coalescing, restart persistence, replay suppression, real OpenCode result evidence, and desktop/phone rendering.
-- Add deliberate attachment upload and generated-file return with limits, hashes, and containment.
+- **Done:** Add deliberate attachment upload with type/size limits, room-scoped retry receipts, UUID storage, hashes, ACP byte delivery to local and remote agents, verified downloads, mobile composition, and deletion cleanup.
+- Add generated-file return with limits, hashes, preview, and containment.
 - Keep provider credentials on the execution machine and out of logs, prompts, Git, and registry state.
 
 The live `REAL` evidence is separate from offline tests: file/session acceptance uses two small model calls, and supervision acceptance uses five. Both verify task artifacts within isolated acceptance roots; they do not claim an operating-system sandbox or restrict OpenCode's own profile/session storage. DSH remains an independent future adapter.
 
 ### Exit gate
 
-A real agent completes a disposable task with native tool evidence, answers a question, receives an approval, returns a file, resumes its session, and passes failure/restart tests without exposing credentials. Native file evidence, session resume, detailed approval, native form question, stop/failure supervision, recovery, and rich progress now pass; generated-file return remains.
+A real agent completes a disposable task with native tool evidence, answers a question, receives an approval, exchanges files deliberately, resumes its session, and passes failure/restart tests without exposing credentials. Native file evidence, attachment delivery, session resume, detailed approval, native form question, stop/failure supervision, recovery, and rich progress now pass; generated-file return remains.
 
 ## M3 — Teams and controlled coordination
 

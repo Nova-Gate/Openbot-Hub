@@ -170,11 +170,11 @@ export class AcpClient {
     return created.sessionId;
   }
 
-  async prompt(sessionId, text) {
+  async prompt(sessionId, text, attachments = []) {
     const baseline = this.notifications.length;
     const result = await this.request("session/prompt", {
       sessionId,
-      prompt: [{ type: "text", text }],
+      prompt: [{ type: "text", text }, ...attachments],
     });
     await this.settleNotifications();
     const answer = this.notifications.slice(baseline)

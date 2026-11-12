@@ -2,6 +2,7 @@ import { copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { AgentRuntime } from "./agent-runtime.mjs";
+import { acpAttachmentBlock, allowedAttachmentTypes, AttachmentStore, attachmentMediaType, attachmentName, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS_PER_MESSAGE, publicAttachment } from "./attachments.mjs";
 import { normalizeForm, protocolValue, validateFormContent } from "./elicitation.mjs";
 import { normalizeExecutionEvent } from "./execution-events.mjs";
 import { redactError } from "./redact.mjs";
@@ -57,6 +58,8 @@ export class Hub {
     this.saveQueue = Promise.resolve();
     this.pendingApprovals = new Map();
     this.approvalTimers = new Map();
+    this.pendingAttachmentUploads = new Map();
+    this.attachmentStore = new AttachmentStore(resolve(dirname(statePath), "attachments"));
   }
 
   async load() {
@@ -104,7 +107,7 @@ export class Hub {
       };
     });
     this.state = {
-      version: 5,
+      version: 6,
       rooms,
       agentDefinitions: definitions.map((agent) => ({ ...agent, enabled: agent.enabled !== false })),
       agents: definitions.map((definition) => {
@@ -126,6 +129,8 @@ export class Hub {
       }]).map((message) => ({ ...message, roomId: message.roomId ?? "army" })),
       executions,
       approvals,
+      attachments: saved?.attachments ?? [],
+      attachmentReceipts: saved?.attachmentReceipts ?? {},
       receipts: saved?.receipts ?? {},
     };
     this.runtime = new AgentRuntime({
@@ -142,6 +147,7 @@ export class Hub {
       onNotification: (notification) => this.recordExecutionEvent(notification),
     });
     await mkdir(dirname(this.statePath), { recursive: true });
+    await this.attachmentStore.init();
     await this.save();
   }
 
@@ -159,7 +165,9 @@ export class Hub {
       messages: this.state.messages,
       executions: this.state.executions,
       approvals: this.state.approvals,
-      limits: { maxTurnsPerRequest: MAX_TURNS_PER_REQUEST },
+      attachments: this.state.attachments.map(publicAttachment),
+      attachmentTypes: allowedAttachmentTypes(),
+      limits: { maxTurnsPerRequest: MAX_TURNS_PER_REQUEST, maxAttachmentBytes: MAX_ATTACHMENT_BYTES, maxAttachmentsPerMessage: MAX_ATTACHMENTS_PER_MESSAGE },
     };
   }
 
@@ -274,18 +282,26 @@ export class Hub {
     if (this.state.executions.some((execution) => execution.roomId === room.id && ["queued", "running", "waiting"].includes(execution.status))) {
       throw problem("Room deletion is blocked while work is active.", 409);
     }
+    if (this.pendingAttachmentUploads.get(room.id)) {
+      throw problem("Room deletion is blocked while an attachment upload is active.", 409);
+    }
     const deletedMessages = this.state.messages.filter((message) => message.roomId === room.id);
     const deletedMessageIds = new Set(deletedMessages.map((message) => message.id));
     const deletedExecutions = this.state.executions.filter((execution) => execution.roomId === room.id).length;
     const deletedApprovals = this.state.approvals.filter((approval) => approval.roomId === room.id).length;
+    const deletedAttachments = this.state.attachments.filter((attachment) => attachment.roomId === room.id);
+    const deletedAttachmentIds = new Set(deletedAttachments.map((attachment) => attachment.id));
     this.state.rooms = this.state.rooms.filter((candidate) => candidate.id !== room.id);
     this.state.messages = this.state.messages.filter((message) => message.roomId !== room.id);
     this.state.executions = this.state.executions.filter((execution) => execution.roomId !== room.id);
     this.state.approvals = this.state.approvals.filter((approval) => approval.roomId !== room.id);
+    this.state.attachments = this.state.attachments.filter((attachment) => attachment.roomId !== room.id);
+    this.state.attachmentReceipts = Object.fromEntries(Object.entries(this.state.attachmentReceipts).filter(([, attachmentId]) => !deletedAttachmentIds.has(attachmentId)));
     this.state.receipts = Object.fromEntries(Object.entries(this.state.receipts).filter(([, messageId]) => !deletedMessageIds.has(messageId)));
     await this.save();
+    await Promise.all(deletedAttachments.map((attachment) => this.attachmentStore.remove(attachment.id)));
     this.emit("change");
-    return { removed: room.id, deletedMessages: deletedMessages.length, deletedExecutions, deletedApprovals };
+    return { removed: room.id, deletedMessages: deletedMessages.length, deletedExecutions, deletedApprovals, deletedAttachments: deletedAttachments.length };
   }
 
   normalizeAgent(input, existing = null) {
@@ -404,7 +420,66 @@ export class Hub {
     return { agentId, ...session.health };
   }
 
-  async post({ text, clientMessageId, roomId = "army" }) {
+  async uploadAttachment(roomId, { name, mediaType, clientAttachmentId, body }) {
+    const room = this.room(roomId);
+    const safeName = attachmentName(name);
+    const safeMediaType = attachmentMediaType(safeName, mediaType);
+    const receipt = clean(clientAttachmentId);
+    if (!receipt || receipt.length > 128 || /[\u0000-\u001f\u007f]/.test(receipt)) throw problem("A stable client attachment ID of at most 128 characters is required.");
+    const key = `${room.id}:${receipt}`;
+    this.pendingAttachmentUploads.set(room.id, (this.pendingAttachmentUploads.get(room.id) ?? 0) + 1);
+    try {
+      const saved = await this.attachmentStore.save({ name: safeName, mediaType: safeMediaType, body });
+      const existingId = this.state.attachmentReceipts[key];
+      if (existingId) {
+        try {
+          const existing = this.state.attachments.find((attachment) => attachment.id === existingId);
+          if (!existing) throw problem("The attachment receipt points to missing metadata.", 409);
+          const [original, duplicate] = await Promise.all([this.attachmentStore.read(existing), this.attachmentStore.read(saved)]);
+          if (existing.name !== saved.name || existing.mediaType !== saved.mediaType || !original.equals(duplicate)) {
+            throw problem("This client attachment ID was already used for different content.", 409);
+          }
+          return { attachment: publicAttachment(existing), duplicate: true };
+        } finally {
+          await this.attachmentStore.remove(saved.id);
+        }
+      }
+      const attachment = {
+        id: saved.id,
+        roomId: room.id,
+        name: saved.name,
+        mediaType: saved.mediaType,
+        size: saved.size,
+        sha256: saved.sha256,
+        createdAt: saved.createdAt,
+        messageId: null,
+      };
+      this.state.attachments.push(attachment);
+      this.state.attachmentReceipts[key] = attachment.id;
+      try {
+        await this.save();
+      } catch (error) {
+        this.state.attachments = this.state.attachments.filter((candidate) => candidate.id !== attachment.id);
+        delete this.state.attachmentReceipts[key];
+        await this.attachmentStore.remove(attachment.id);
+        throw error;
+      }
+      this.emit("change");
+      return { attachment: publicAttachment(attachment), duplicate: false };
+    } finally {
+      const remaining = this.pendingAttachmentUploads.get(room.id) - 1;
+      if (remaining > 0) this.pendingAttachmentUploads.set(room.id, remaining);
+      else this.pendingAttachmentUploads.delete(room.id);
+    }
+  }
+
+  async attachmentContent(attachmentId) {
+    const attachment = this.state.attachments.find((candidate) => candidate.id === attachmentId);
+    if (!attachment) throw problem("Attachment not found.", 404);
+    return { attachment: publicAttachment(attachment), content: await this.attachmentStore.read(attachment) };
+  }
+
+  async post({ text, clientMessageId, roomId = "army", attachmentIds = [] }) {
     const messageText = clean(text);
     if (!messageText) throw problem("Message text is required.");
     if (messageText.length > 16_000) throw problem("Message is too long.", 413);
@@ -414,6 +489,17 @@ export class Hub {
     if (existingId) {
       return { message: this.state.messages.find((message) => message.id === existingId), recipients: [], executions: [], duplicate: true };
     }
+    if (!Array.isArray(attachmentIds) || attachmentIds.length > MAX_ATTACHMENTS_PER_MESSAGE || attachmentIds.some((id) => typeof id !== "string")) {
+      throw problem(`Attachments must be an array of at most ${MAX_ATTACHMENTS_PER_MESSAGE} attachment IDs.`);
+    }
+    if (new Set(attachmentIds).size !== attachmentIds.length) throw problem("An attachment can be included only once per message.", 409);
+    const attachments = attachmentIds.map((id) => {
+      const attachment = this.state.attachments.find((candidate) => candidate.id === id);
+      if (!attachment) throw problem("Attachment not found.", 404);
+      if (attachment.roomId !== room.id) throw problem("Attachments can only be used in the room where they were uploaded.", 409);
+      if (attachment.messageId) throw problem("An attachment can only be sent once.", 409);
+      return attachment;
+    });
     const recipients = this.recipients(messageText, room);
     if (recipients.length > MAX_TURNS_PER_REQUEST) {
       throw problem(`A request can start at most ${MAX_TURNS_PER_REQUEST} agent turns.`, 409);
@@ -428,6 +514,8 @@ export class Hub {
       createdAt: new Date().toISOString(),
       recipients,
     };
+    for (const attachment of attachments) attachment.messageId = message.id;
+    message.attachments = attachments.map(publicAttachment);
     const executions = recipients.map((agentId) => {
       const at = new Date().toISOString();
       return {
@@ -665,9 +753,17 @@ export class Hub {
     const agent = this.state.agentDefinitions.find((candidate) => candidate.id === execution.agentId);
     try {
       if (!origin || !agent) throw problem("Execution origin or agent is missing.", 404);
+      const attachments = [];
+      for (const metadata of origin.attachments ?? []) {
+        const attachment = this.state.attachments.find((candidate) => candidate.id === metadata.id && candidate.roomId === origin.roomId);
+        if (!attachment) throw problem("Execution attachment metadata is missing.", 409);
+        const content = await this.attachmentStore.read(attachment);
+        attachments.push(acpAttachmentBlock(attachment, content));
+      }
       const sessionId = this.state.agents.find((candidate) => candidate.id === execution.agentId)?.sessionId;
       const result = await this.runtime.run(execution.agentId, sessionId, origin.text, {
         executionId,
+        attachments,
         onStart: async () => {
           if (execution.status !== "queued") return;
           this.transitionExecution(execution, "running");

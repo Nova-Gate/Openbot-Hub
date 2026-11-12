@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -9,6 +9,10 @@ const artifacts = resolve(root, "artifacts/ui-validation");
 const validationState = resolve(root, "runtime/ui-validation");
 await mkdir(artifacts, { recursive: true });
 await rm(validationState, { recursive: true, force: true });
+await mkdir(validationState, { recursive: true });
+const attachmentFixture = join(validationState, "browser attachment.txt");
+const attachmentContent = "Browser attachment proof: bytes arrived separately from the prompt.\n";
+await writeFile(attachmentFixture, attachmentContent);
 const profile = await mkdtemp(join(tmpdir(), "openbot-hub-chrome-"));
 let dev;
 let chrome;
@@ -140,6 +144,43 @@ try {
   })`);
   await cdp.screenshot("desktop");
 
+  await cdp.send("DOM.enable");
+  const browserDocument = await cdp.send("DOM.getDocument", { depth: 0 });
+  const fileInput = await cdp.send("DOM.querySelector", { nodeId: browserDocument.root.nodeId, selector: "#attachment-input" });
+  await cdp.send("DOM.setFileInputFiles", { nodeId: fileInput.nodeId, files: [attachmentFixture] });
+  await cdp.wait(`document.querySelector('.attachment-chip[data-status="ready"]')`);
+  const attachmentSelection = await cdp.evaluate(`({
+    roomLocked: [...document.querySelectorAll('#room-list .room-row')].every((button) => button.disabled),
+    sendEnabled: !document.querySelector('#send-button').disabled,
+    hashVisible: document.querySelector('.attachment-chip').textContent.includes('SHA-256')
+  })`);
+  await cdp.evaluate(`(() => {
+    document.querySelector('#message-input').value = '@Mini Fake browser attachment';
+    document.querySelector('#composer').requestSubmit();
+  })()`);
+  await cdp.wait(`document.querySelector('.message-attachment') && document.querySelector('#messages').textContent.includes('Received: @Mini Fake browser attachment')`);
+  const attachmentBrowser = await cdp.evaluate(`(async () => {
+    const link = document.querySelector('.message-attachment');
+    const response = await fetch(link.href);
+    return {
+      metadata: link.textContent.includes('browser attachment.txt') && link.textContent.includes('SHA-256'),
+      download: await response.text(),
+      composerCleared: !document.querySelector('.attachment-chip') && document.querySelector('#attachment-list').hidden,
+      roomUnlocked: [...document.querySelectorAll('#room-list .room-row')].every((button) => !button.disabled),
+      fitsViewport: document.documentElement.scrollWidth <= innerWidth
+    };
+  })()`);
+  const attachmentState = await (await fetch(new URL('/api/state', url))).json();
+  const attachmentMessage = attachmentState.messages.find((message) => message.text === '@Mini Fake browser attachment');
+  const deliveredAttachment = await readFile(join(root, 'runtime/hub/mini-workspace/received-attachments', attachmentMessage.attachments[0].id), 'utf8');
+  const attachmentUi = {
+    ...attachmentSelection,
+    ...attachmentBrowser,
+    download: attachmentBrowser.download === attachmentContent,
+    byteDelivery: deliveredAttachment === attachmentContent,
+  };
+  await cdp.screenshot("desktop-attachment");
+
   const executionVisible = await cdp.evaluate(`[...document.querySelectorAll('.execution-card')].some((card) => card.dataset.status === 'completed')`);
   await cdp.evaluate(`[...document.querySelectorAll('.agent-row')].find((row) => row.textContent.includes('Mini Fake')).querySelector('.agent-test').click()`);
   await cdp.wait(`[...document.querySelectorAll('.agent-row')].find((row) => row.textContent.includes('Mini Fake')).textContent.includes('AVAILABLE')`);
@@ -205,6 +246,7 @@ try {
     document.querySelector('#composer').requestSubmit();
   })()`);
   await cdp.wait(`document.querySelector('.approval-card[data-kind="question"][data-status="pending"] .question-submit')`);
+  await new Promise((resolveWait) => setTimeout(resolveWait, 120));
   await cdp.evaluate(`(() => {
     const card = document.querySelector('.approval-card[data-kind="question"][data-status="pending"]');
     card.querySelector('[name="pm"]').value = 'npm';
@@ -351,6 +393,9 @@ try {
   await cdp.evaluate(`document.querySelector('.execution-event[data-kind="tool"][data-status="completed"]').scrollIntoView({ block: 'center' })`);
   const mobileProgress = await cdp.evaluate(`document.documentElement.scrollWidth <= innerWidth && document.querySelector('.execution-event[data-kind="tool"][data-status="completed"]').closest('.execution-card').textContent.includes('"stdout": "progress complete')`);
   await cdp.screenshot("mobile-progress");
+  await cdp.evaluate(`document.querySelector('.message-attachment').scrollIntoView({ block: 'center' })`);
+  const mobileAttachment = await cdp.evaluate(`document.documentElement.scrollWidth <= innerWidth && document.querySelector('.message-attachment').textContent.includes('browser attachment.txt')`);
+  await cdp.screenshot("mobile-attachment");
   await cdp.evaluate(`[...document.querySelectorAll('.mention-chip')].find((button) => button.textContent === '@Dell Fake').click()`);
   const mobile = await cdp.evaluate(`({
     width: innerWidth,
@@ -371,16 +416,17 @@ try {
   })`);
   await cdp.screenshot("mobile-agent-dialog");
   await cdp.evaluate(`document.querySelector('[data-dialog-close="agent-dialog"]').click(); document.querySelector('[data-close="inspector"]').click()`);
-  const report = { url, desktop, supervision, registered, disabled, removed, roomScoped, roomReply, roomLifecycle, drawer, mobile, mobileApproval, mobileQuestion, mobileProgress, mobileForm, runtimeExceptions: failures };
+  const report = { url, desktop, attachmentUi, supervision, registered, disabled, removed, roomScoped, roomReply, roomLifecycle, drawer, mobile, mobileApproval, mobileQuestion, mobileProgress, mobileAttachment, mobileForm, runtimeExceptions: failures };
   await writeFile(join(artifacts, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
   if (desktop.rooms !== 1 || desktop.agents !== 2 || !desktop.railVisible || !desktop.inspectorVisible || desktop.horizontalOverflow || !desktop.replyVisible) throw new Error("Desktop acceptance failed");
+  if (!Object.values(attachmentUi).every(Boolean)) throw new Error("Browser attachment acceptance failed");
   if (!Object.values(supervision).every(Boolean)) throw new Error("Browser supervision acceptance failed");
   if (!registered || !disabled || !removed) throw new Error("Agent management acceptance failed");
   if (roomScoped.rooms !== 2 || !roomScoped.mini || !roomScoped.dellExcluded || !roomReply || !Object.values(roomLifecycle).every(Boolean)) throw new Error("Room management acceptance failed");
   if (!drawer.inspectorOpen || !drawer.backdropVisible || drawer.horizontalOverflow) throw new Error("Mobile drawer acceptance failed");
   if (!mobile.railHidden || !mobile.inspectorClosed || !mobile.armySelected || !mobile.addressed || mobile.horizontalOverflow) throw new Error("Mobile acceptance failed");
-  if (!mobileApproval || !mobileQuestion || !mobileProgress) throw new Error("Mobile interaction acceptance failed");
+  if (!mobileApproval || !mobileQuestion || !mobileProgress || !mobileAttachment) throw new Error("Mobile interaction acceptance failed");
   if (!mobileForm.fitsViewport || !mobileForm.singleColumn || !mobileForm.localFieldsVisible) throw new Error("Mobile form acceptance failed");
   if (failures.length) throw new Error("Browser runtime exceptions occurred");
 } finally {

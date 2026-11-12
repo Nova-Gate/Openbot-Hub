@@ -58,14 +58,19 @@
 
       <footer class="composer-wrap">
         <div class="mention-row" id="mention-row" aria-label="Address an agent"></div>
+        <input id="attachment-input" type="file" accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg" multiple hidden>
+        <div class="attachment-list" id="attachment-list" aria-label="Selected attachments" aria-live="polite" hidden></div>
         <form class="composer" id="composer">
           <label class="sr-only" for="message-input">Message the current room</label>
+          <button class="attach-button" id="attachment-button" type="button" aria-label="Attach files">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.6-9.6a4 4 0 0 1 5.7 5.7l-9.6 9.6a2 2 0 0 1-2.8-2.8l8.9-8.9"/></svg>
+          </button>
           <textarea id="message-input" rows="2" maxlength="16000" placeholder="Message the room — @mention an agent to execute…" required></textarea>
           <button class="send-button" id="send-button" type="submit" aria-label="Send message">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z M22 2 11 13"/></svg>
           </button>
         </form>
-        <div class="composer-meta"><span>ENTER TO SEND · SHIFT+ENTER FOR A NEW LINE</span><span>6-TURN GLOBAL LIMIT</span></div>
+        <div class="composer-meta"><span>ENTER TO SEND · SHIFT+ENTER FOR A NEW LINE</span><span>4 FILES · 8 MIB EACH</span></div>
       </footer>
     </main>
 

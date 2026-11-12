@@ -69,6 +69,37 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/api/health" && request.method === "GET") {
       return json(response, 200, { ok: true, product: "OpenBot Hub", accounts: false, externalAnalytics: false });
     }
+    const roomAttachmentMatch = url.pathname.match(/^\/api\/rooms\/([^/]+)\/attachments$/);
+    if (roomAttachmentMatch && request.method === "POST") {
+      if (request.headers["content-type"]?.split(";", 1)[0].trim().toLowerCase() !== "application/octet-stream") {
+        throw Object.assign(new Error("Binary attachment uploads require application/octet-stream."), { status: 415 });
+      }
+      let name;
+      try { name = decodeURIComponent(request.headers["x-attachment-name"] ?? ""); } catch {
+        throw Object.assign(new Error("Attachment name encoding is invalid."), { status: 400 });
+      }
+      const result = await hub.uploadAttachment(decodeURIComponent(roomAttachmentMatch[1]), {
+        name,
+        mediaType: request.headers["x-attachment-media-type"],
+        clientAttachmentId: request.headers["x-client-attachment-id"],
+        body: request,
+      });
+      return json(response, result.duplicate ? 200 : 201, result);
+    }
+    const attachmentContentMatch = url.pathname.match(/^\/api\/attachments\/([^/]+)\/content$/);
+    if (attachmentContentMatch && request.method === "GET") {
+      const { attachment, content } = await hub.attachmentContent(decodeURIComponent(attachmentContentMatch[1]));
+      const encodedName = encodeURIComponent(attachment.name).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+      response.writeHead(200, {
+        "Content-Type": attachment.mediaType,
+        "Content-Length": content.length,
+        "Content-Disposition": `attachment; filename="download"; filename*=UTF-8''${encodedName}`,
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+      });
+      response.end(content);
+      return;
+    }
     if (url.pathname === "/api/messages" && request.method === "POST") {
       return json(response, 202, await hub.post(await body(request)));
     }

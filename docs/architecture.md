@@ -54,10 +54,11 @@ Owns:
 - Durable, size-bounded tool and plan progress on each execution, with coalesced tool updates, sanitized operation input/output, and authoritative execution-node attribution.
 - Room-bound ACP permission requests and native form questions with explicit pending and terminal decision records; permission operation details are preserved, redacted, and rendered as text.
 - Direct mentions, room-scoped `@everyone`, idempotent user-post receipts, and a six-turn request limit.
+- Deliberate room-bound attachments with owner-only UUID storage, size/type checks, SHA-256 receipts, retry deduplication, verified downloads, and one-message use. Bytes remain outside JSON state and are delivered as ACP content blocks.
 - Live browser updates over server-sent events.
 - Host-independent agent addressing.
 
-It does not yet own attachment replication, autonomous delegation, or reusable teams.
+It does not yet own generated-file return, autonomous delegation, or reusable teams.
 
 ### Execution-node connector
 
@@ -97,15 +98,17 @@ The Army room is global and always addresses every enabled agent. Project rooms 
 
 ## Message and session flow
 
-1. Mo posts in the selected room with a client message ID.
-2. Hub stores the message and its idempotency receipt before starting execution.
-3. Leading mentions select enabled room members; `@everyone` selects all enabled members in that room.
-4. Each selected agent enters its own serial queue.
-5. The runtime creates or resumes the agent's durable ACP session.
-6. Local agents execute directly; remote agents pass through the authenticated node connector.
-7. ACP `session/update` notifications are handled sequentially and bound to the active execution/session; session-load replay is drained before activation. Tool calls and plans persist as coalesced, redacted execution events with Hub-assigned node IDs, and `prompt` waits for event persistence before returning. ACP `session/request_permission` requests pause the execution as `waiting` and appear in the originating room with the complete sanitized operation snapshot. The browser renders commands, raw input, paths/locations, content, and diffs as text before Mo selects an option. ACP `elicitation/create` form questions use the same room and execution binding; structured answers, decline, and cancel return to the native session. Rejection, expiry, stop, and provider failure produce explicit terminal records.
-8. Replies return to the originating room with author, origin, and execution-node identity.
-9. Saved session IDs are reused after application restart.
+1. Optional files upload as raw binary bodies with a room-scoped client attachment ID. The Hub validates filename, media type, size, and content, writes bytes under a random UUID, and persists only metadata, SHA-256, and the receipt. An identical retry returns the original attachment; a conflicting retry fails without duplicating bytes.
+2. Mo posts in the selected room with a client message ID and up to four unused attachment IDs from that room.
+3. Hub marks the attachments used, stores their public metadata on the message and its idempotency receipt, then starts execution.
+4. Leading mentions select enabled room members; `@everyone` selects all enabled members in that room.
+5. Each selected agent enters its own serial queue.
+6. Before prompting, the Hub rereads every attachment and verifies size and SHA-256. Text/PDF resources and images become ACP content blocks after the text block; central paths are never substituted.
+7. The runtime creates or resumes the agent's durable ACP session.
+8. Local agents execute directly; remote agents pass through the authenticated node connector with the same content blocks and source bytes.
+9. ACP `session/update` notifications are handled sequentially and bound to the active execution/session; session-load replay is drained before activation. Tool calls and plans persist as coalesced, redacted execution events with Hub-assigned node IDs, and `prompt` waits for event persistence before returning. ACP `session/request_permission` requests pause the execution as `waiting` and appear in the originating room with the complete sanitized operation snapshot. The browser renders commands, raw input, paths/locations, content, and diffs as text before Mo selects an option. ACP `elicitation/create` form questions use the same room and execution binding; structured answers, decline, and cancel return to the native session. Rejection, expiry, stop, and provider failure produce explicit terminal records.
+10. Replies return to the originating room with author, origin, and execution-node identity.
+11. Saved session IDs and attachment metadata are reused after application restart; downloads verify the bytes again, and room deletion removes that room's attachment receipts and files.
 
 A repeated client message ID returns the original receipt and starts no new execution. Automatic recovery of an interrupted active turn is not implemented and must not be assumed safe. Real OpenCode acceptance covers detailed permission approval, a native form question, active stop, provider-crash failure, descendant cleanup, and subsequent execution in the same native session.
 
@@ -116,19 +119,19 @@ A repeated client message ID returns the original receipt and starts no new exec
 - ACP spawn/stream failures reject pending work and reset startup state rather than terminating the Node process.
 - Manual stops and unexpected provider exits clean up the ACP process tree; subsequent work starts a fresh ACP process without creating a second native session.
 - Permission and question decisions are bound to the exact execution and native session. Pending decisions cannot be answered twice, answered with an invalid value, or resumed after stop, expiry, provider failure, or restart. The pending resolver and expiry timer are registered before persistence, so a recorded selection cannot be returned to ACP as a cancellation.
-- Active agents cannot be edited or removed; room deletion removes that room's execution and approval history only after active work stops.
+- Active agents cannot be edited or removed; room deletion is blocked during active work or attachment uploads. Once those settle, deletion removes that room's execution and approval history plus attachment metadata, upload receipts, and stored files. Pending-upload guards release on success and failure.
 - Provider and connector errors are redacted before health records, execution history, room messages, or HTTP responses persist or display them. Progress titles and operation payloads use the same redaction path, retained events are capped, and an event-persistence failure rejects the active prompt rather than reporting false success.
 
 ## Workspace and tool rules
 
 A central path must never be passed blindly to a remote machine. Each remote agent has an explicit node-local workspace root. Execution-proof files record the node ID, hostname, process, session, and actual workspace. Real OpenCode acceptance checks exact native file content and unexpected task artifacts within its isolated acceptance root; this is not an OS-level sandbox.
 
-Future attachments require deliberate transfer, size limits, and hash verification. Future remote tools require explicit execution-location and authorization tests; central browser or computer-use tools must never be presented as remote-machine tools.
+Attachment transfer is deliberate: the Hub enforces type and size limits, stores bytes by random UUID with owner-only permissions, verifies SHA-256 before execution and download, and sends ACP content blocks rather than central paths. Fake local and remote nodes write exact received bytes under the selected agent workspace's `received-attachments/` directory. Future remote tools require explicit execution-location and authorization tests; central browser or computer-use tools must never be presented as remote-machine tools.
 
 ## Security and deployment
 
 - The web server listens on `127.0.0.1` by default and accepts only loopback Host headers.
-- Browser mutations require a same-origin `Origin` when supplied, reject cross-site fetch metadata, and require `application/json` for request bodies. Non-browser CLI requests without an Origin remain supported on loopback.
+- Browser JSON mutations require a same-origin `Origin` when supplied, reject cross-site fetch metadata, and require `application/json` for request bodies. Raw attachment upload instead uses `application/octet-stream` on its dedicated route with the same origin protections and explicit filename/media-type/receipt headers. Non-browser CLI requests without an Origin remain supported on loopback.
 - Connector credentials are generated locally, stored with owner-only permissions, and excluded from Git.
 - Tailscale provides reachability, not application authorization. Secure phone access still needs an authenticated access design before binding the web server to a non-loopback interface.
 - No vendor hosted server is required.
@@ -145,15 +148,16 @@ Implemented and tested:
 - Node-tagged replies and execution evidence.
 - Durable coalesced tool/plan progress with operation input/output, failure display, and execution-node labels on desktop and at 390 px.
 - Room-scoped `@everyone`, duplicate-post suppression, supervision, and restart recovery.
-- Real OpenCode native file, completed tool-progress, replay-suppression, and post-restart session-recall acceptance.
+- Deliberate attachment upload, integrity checks, retry-safe receipts, ACP delivery, verified downloads, mobile composition, and room-deletion cleanup.
+- Real OpenCode native file, embedded-resource attachment, completed tool-progress, replay-suppression, and post-restart session-recall acceptance.
 - Real OpenCode detailed permission, native form-question, active-stop, provider-failure, descendant-cleanup, and post-failure recovery acceptance.
 - Room-bound approval/rejection and native question accept/decline/cancel controls on desktop and at 390 px.
-- Desktop and 390 px mobile chat, drawer, management-form, and OpenCode-form acceptance.
+- Desktop and 390 px mobile chat, drawer, attachment, management-form, and OpenCode-form acceptance.
 
 Not yet implemented:
 
 - Reusable teams and controlled delegation.
 - Physical Dell and MacBook enrollment.
 - DSH, Hermes, or Grok adapters.
-- Attachments and generated-file return.
+- Generated-file return.
 - Network user authentication and production hardening.

@@ -2,6 +2,9 @@ const messagesElement = document.querySelector("#messages");
 const input = document.querySelector("#message-input");
 const composer = document.querySelector("#composer");
 const sendButton = document.querySelector("#send-button");
+const attachmentInput = document.querySelector("#attachment-input");
+const attachmentButton = document.querySelector("#attachment-button");
+const attachmentList = document.querySelector("#attachment-list");
 const agentList = document.querySelector("#agent-list");
 const roomList = document.querySelector("#room-list");
 const mentionRow = document.querySelector("#mention-row");
@@ -12,6 +15,8 @@ let currentRoomId = "army";
 try { currentRoomId = localStorage.getItem("openbot-hub.room") || "army"; } catch {}
 let toastTimer;
 let firstRender = true;
+let selectedAttachments = [];
+let sending = false;
 
 function showToast(text) {
   toast.textContent = text;
@@ -32,6 +37,109 @@ async function api(path, options = {}) {
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
   return result;
+}
+
+function formatBytes(size) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KiB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+function fileMediaType(file) {
+  const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
+  return ({
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+    ".csv": "text/csv",
+    ".json": "application/json",
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+  })[extension] ?? null;
+}
+
+function updateComposerState() {
+  sendButton.disabled = sending || selectedAttachments.some((attachment) => attachment.status !== "ready");
+  attachmentButton.disabled = sending || selectedAttachments.length >= (state.limits?.maxAttachmentsPerMessage ?? 4);
+}
+
+function renderAttachments() {
+  attachmentList.replaceChildren();
+  attachmentList.hidden = selectedAttachments.length === 0;
+  for (const item of selectedAttachments) {
+    const chip = element("div", "attachment-chip");
+    chip.dataset.status = item.status;
+    chip.dataset.clientAttachmentId = item.clientId;
+    chip.append(element("span", "attachment-chip-name", item.file.name));
+    const status = item.status === "ready"
+      ? `${formatBytes(item.file.size)} · READY · SHA-256 ${item.attachment.sha256.slice(0, 12)}…`
+      : item.status === "error" ? `${formatBytes(item.file.size)} · ${item.error}` : `${formatBytes(item.file.size)} · UPLOADING`;
+    chip.append(element("span", "attachment-chip-meta", status));
+    const remove = element("button", "attachment-remove", "×");
+    remove.type = "button";
+    remove.disabled = sending;
+    remove.setAttribute("aria-label", `Remove ${item.file.name}`);
+    remove.addEventListener("click", () => {
+      selectedAttachments = selectedAttachments.filter((candidate) => candidate.clientId !== item.clientId);
+      renderAttachments();
+      renderRooms();
+      renderHeader();
+    });
+    chip.append(remove);
+    attachmentList.append(chip);
+  }
+  updateComposerState();
+}
+
+async function uploadSelectedAttachment(item) {
+  try {
+    const response = await fetch(`/api/rooms/${encodeURIComponent(item.roomId)}/attachments`, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Attachment-Name": encodeURIComponent(item.file.name),
+        "X-Attachment-Media-Type": item.mediaType,
+        "X-Client-Attachment-Id": item.clientId,
+      },
+      body: item.file,
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error ?? `Upload failed (${response.status})`);
+    item.attachment = result.attachment;
+    item.status = "ready";
+  } catch (error) {
+    item.status = "error";
+    item.error = error.message;
+  }
+  renderAttachments();
+}
+
+function selectAttachments(files) {
+  const maximum = state.limits?.maxAttachmentsPerMessage ?? 4;
+  const maximumBytes = state.limits?.maxAttachmentBytes ?? 8 * 1024 * 1024;
+  for (const file of files) {
+    if (selectedAttachments.length >= maximum) {
+      showToast(`A message can carry at most ${maximum} attachments.`);
+      break;
+    }
+    const mediaType = fileMediaType(file);
+    if (!mediaType) {
+      showToast(`${file.name}: use TXT, MD, CSV, JSON, PDF, PNG, or JPEG.`);
+      continue;
+    }
+    if (!file.size || file.size > maximumBytes) {
+      showToast(`${file.name}: files must be between 1 byte and ${formatBytes(maximumBytes)}.`);
+      continue;
+    }
+    const item = { clientId: crypto.randomUUID(), roomId: currentRoomId, file, mediaType, status: "uploading", attachment: null, error: null };
+    selectedAttachments.push(item);
+    void uploadSelectedAttachment(item);
+  }
+  renderAttachments();
+  renderRooms();
+  renderHeader();
 }
 
 function currentRoom() {
@@ -57,6 +165,7 @@ function renderRooms() {
   for (const room of state.rooms) {
     const row = element("button", `room-row${room.id === currentRoomId ? " active" : ""}`);
     row.type = "button";
+    row.disabled = selectedAttachments.length > 0;
     row.setAttribute("aria-label", `Open ${room.name} room`);
     if (room.id === currentRoomId) row.setAttribute("aria-current", "page");
     row.append(element("span", "room-mark", room.name.slice(0, 1).toUpperCase()));
@@ -80,6 +189,8 @@ function renderHeader() {
   document.querySelector("#room-name").textContent = room.name;
   document.querySelector("#room-eyebrow").textContent = room.global ? "GLOBAL ARMY ROOM" : "PROJECT ROOM";
   document.querySelector("#room-membership").textContent = room.global ? "/ all agents" : `/ ${members(room).length} active members`;
+  document.querySelector("#add-room-button").disabled = selectedAttachments.length > 0;
+  document.querySelector("#edit-room-button").disabled = selectedAttachments.length > 0;
   document.title = `OpenBot Hub — ${room.name}`;
 }
 
@@ -317,6 +428,20 @@ function executionCard(execution) {
   return card;
 }
 
+function appendMessageAttachments(container, message) {
+  if (!message.attachments?.length) return;
+  const list = element("div", "message-attachments");
+  for (const attachment of message.attachments) {
+    const link = element("a", "message-attachment", attachment.name);
+    link.href = `/api/attachments/${encodeURIComponent(attachment.id)}/content`;
+    link.download = attachment.name;
+    link.dataset.attachmentId = attachment.id;
+    link.append(element("small", "", `${formatBytes(attachment.size)} · ${attachment.mediaType} · SHA-256 ${attachment.sha256.slice(0, 12)}…`));
+    list.append(link);
+  }
+  container.append(list);
+}
+
 function renderMessages() {
   const nearBottom = messagesElement.scrollHeight - messagesElement.scrollTop - messagesElement.clientHeight < 160;
   messagesElement.replaceChildren();
@@ -330,6 +455,7 @@ function renderMessages() {
       const row = element("article", "message message-user");
       const bubble = element("div", "message-bubble");
       bubble.append(element("div", "message-text", message.text));
+      appendMessageAttachments(bubble, message);
       bubble.append(element("div", "message-meta", `MO · ${time(message.createdAt)}`));
       row.append(bubble);
       messagesElement.append(row);
@@ -452,12 +578,16 @@ function renderAll() {
   renderAgents();
   renderMentions();
   renderMessages();
+  renderAttachments();
 }
 
 async function refresh() {
   try {
     state = await api("/api/state");
-    if (!state.rooms.some((room) => room.id === currentRoomId)) currentRoomId = state.rooms[0]?.id ?? "army";
+    if (!state.rooms.some((room) => room.id === currentRoomId)) {
+      currentRoomId = state.rooms[0]?.id ?? "army";
+      selectedAttachments = [];
+    }
     renderAll();
   } catch (error) {
     showToast(error.message);
@@ -467,24 +597,44 @@ async function refresh() {
 composer.addEventListener("submit", async (event) => {
   event.preventDefault();
   const text = input.value.trim();
-  if (!text) return;
-  sendButton.disabled = true;
+  if (!text || sending) return;
+  if (selectedAttachments.some((attachment) => attachment.status !== "ready")) {
+    showToast("Wait for every attachment to upload successfully, or remove the failed file.");
+    return;
+  }
+  sending = true;
+  updateComposerState();
   try {
     const result = await api("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, roomId: currentRoomId, clientMessageId: crypto.randomUUID() }),
+      body: JSON.stringify({
+        text,
+        roomId: currentRoomId,
+        clientMessageId: crypto.randomUUID(),
+        attachmentIds: selectedAttachments.map((attachment) => attachment.attachment.id),
+      }),
     });
     input.value = "";
     input.style.height = "auto";
+    selectedAttachments = [];
     await refresh();
     if (result.recipients.length === 0) showToast("Message posted. Mention an enabled room member or @everyone to start execution.");
   } catch (error) {
     showToast(error.message);
   } finally {
-    sendButton.disabled = false;
+    sending = false;
+    renderAttachments();
+    renderRooms();
+    renderHeader();
     input.focus();
   }
+});
+
+attachmentButton.addEventListener("click", () => attachmentInput.click());
+attachmentInput.addEventListener("change", () => {
+  selectAttachments([...attachmentInput.files]);
+  attachmentInput.value = "";
 });
 
 input.addEventListener("keydown", (event) => {

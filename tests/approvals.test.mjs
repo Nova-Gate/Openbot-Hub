@@ -163,7 +163,7 @@ test("native form questions and detailed permissions resume with persisted termi
   const reply = state.messages.find((message) => message.id === completedRejection.resultMessageId);
   assert.match(reply.text, /rejected/);
   const persisted = JSON.parse(await readFile(join(directory, "hub-state.json"), "utf8"));
-  assert.equal(persisted.version, 5);
+  assert.equal(persisted.version, 6);
   assert.deepEqual(persisted.approvals.map((approval) => approval.status), ["answered", "rejected"]);
   assert.equal(persisted.approvals.every((approval) => approval.resolvedAt), true);
   assert.deepEqual(JSON.parse(await readFile(join(directory, "mini-state", "client-capabilities.json"), "utf8")), { elicitation: { form: {} } });

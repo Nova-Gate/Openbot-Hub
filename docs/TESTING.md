@@ -20,6 +20,7 @@ The repository contains a runnable, account-free application with:
 - Connectivity checks with available, unavailable, misconfigured, disabled, and untested health.
 - Room rename, purpose/membership editing, and confirmed deletion in the UI and API.
 - Deterministic slow, fail-once, rich progress, native question, detailed approval, and wrong-session fake work for supervision acceptance.
+- Deliberate TXT, MD, CSV, JSON, PDF, PNG, and JPEG attachments with four-file/8 MiB limits, room binding, UUID storage, SHA-256 verification, ACP byte delivery, message downloads, and deletion cleanup.
 - Offline connector/application integration tests and separate live OpenCode file/session and supervision acceptance scripts.
 
 The offline demo and test suite require no upstream OpenBot installation, email address, vendor account, API key, model provider, or paid API call. The optional real OpenCode tests use the CLI's existing provider authentication and make small model calls; they do not use an OpenBot account or copy provider credentials into the Hub.
@@ -35,7 +36,7 @@ npm run test:opencode  # live file/session gate; two small model calls
 npm run test:opencode-supervision  # live question/approval/stop/failure gate; five model calls
 ```
 
-The browser command starts an isolated temporary server on a random port, uses separate runtime state, exercises real desktop and phone-width interactions including pending/completed progress, command/output, plans, failures, visible permission details, and native question accept/decline flows, writes screenshots and a report under `artifacts/ui-validation/`, and stops its temporary processes. It does not replace the persistent service or modify its state. GitHub Actions runs `npm run check` and `npm test` for every pull request and push to `main`; browser and live provider tests remain local acceptance gates.
+The browser command starts an isolated temporary server on a random port, uses separate runtime state, exercises the real file input through Chrome, verifies attachment chips, room locking, message metadata, exact downloads, agent-received bytes, and 390 px layout, then covers pending/completed progress, command/output, plans, failures, visible permission details, and native question accept/decline flows. It writes screenshots and a report under `artifacts/ui-validation/` and stops its temporary processes. It does not replace the persistent service or modify its state. GitHub Actions runs `npm run check` and `npm test` for every pull request and push to `main`; browser and live provider tests remain local acceptance gates.
 
 The integration tests verify:
 
@@ -71,7 +72,11 @@ The integration tests verify:
 - Preservation of message history after agent removal.
 - Duplicate-name rejection and unknown-room/member validation.
 - No duplicate message or execution when a `clientMessageId` is repeated.
-- Registry, room, conversation, execution, approval, and session persistence after an application restart.
+- Attachment content and SHA-256 verification, identical retry deduplication, conflicting-receipt rejection, type/size/path/content rejection, and aborted-transfer cleanup.
+- Room-bound, single-message attachment use, identical bytes delivered to Mini and remote Dell workspaces, and verified downloads after restart.
+- Room deletion blocked during a delayed upload, successful deletion after settlement, and aborted transfers releasing the deletion guard without orphaned metadata or bytes.
+- Legacy-state attachment defaults and room deletion removing attachment metadata, receipts, and stored files.
+- Registry, room, conversation, execution, approval, attachment, and session persistence after an application restart.
 
 ## Real OpenCode acceptance
 
@@ -82,12 +87,13 @@ Set `OPENCODE_CLI=/full/path/to/opencode-cli` when the installed CLI differs fro
 Run `npm run test:opencode`. This makes two small model calls and verifies:
 
 1. Connectivity through real ACP initialization.
-2. A small live task creates `evidence.txt` with an exact random token and no additional workspace files.
-3. The reply and execution retain Army-room, origin, agent, and `mac-mini` identity with queued → running → completed history.
-4. A real OpenCode tool reaches `completed` with operation result evidence, `evidence.txt` details, and authoritative `mac-mini` attribution.
-5. No unexpected task artifacts appear in the control directory outside the disposable workspace, and an outside guard file remains unchanged.
-6. The registry definition contains no provider credential fields.
-7. After a full Hub restart, OpenCode loads the same native session and recalls the token without rereading the file; the no-tool turn contains zero replayed progress events.
+2. A random marker is uploaded as `source.txt`, kept out of the instruction text, and delivered to OpenCode as an ACP embedded text resource. Central storage uses only the attachment UUID, not a Mini path in the prompt.
+3. A small live task reads that resource and creates `evidence.txt` with the exact random token and no additional workspace files.
+4. The reply and execution retain Army-room, origin, agent, and `mac-mini` identity with queued → running → completed history.
+5. A real OpenCode tool reaches `completed` with operation result evidence, `evidence.txt` details, and authoritative `mac-mini` attribution.
+6. No unexpected task artifacts appear in the control directory outside the disposable workspace, and an outside guard file remains unchanged.
+7. The registry definition contains no provider credential fields.
+8. After a full Hub restart, OpenCode loads the same native session and recalls the token without rereading the file; the no-tool turn contains zero replayed progress events.
 
 The JSON report is written to `artifacts/opencode-acceptance/report.json`.
 
@@ -147,6 +153,15 @@ The launcher creates demo-only state under `runtime/`, generates a local connect
 8. Send `@Mini Fake approval before continuing`. Before deciding, confirm the full command, raw input, path/location, content, and diff appear as readable text. Reject the request and confirm the same execution resumes and the reply records the rejection.
 9. Send another approval prompt and stop it while waiting. Confirm the execution becomes **INTERRUPTED**, the approval can no longer be decided, and a later normal prompt succeeds.
 
+### Deliberate attachments
+
+1. Use the paperclip to select a small TXT file. Confirm an upload status chip appears, room switching locks while it is selected, and Send remains disabled until the upload finishes.
+2. Confirm the completed chip shows the filename, size, and SHA-256 prefix. Send `@Mini Fake attachment check` with the file and confirm the message shows its public metadata and a safe download link.
+3. Download the attachment and compare it byte-for-byte with the original. Inspect `runtime/hub/mini-workspace/received-attachments/<attachment-uuid>` and confirm the fake agent received identical bytes under the UUID filename.
+4. Repeat with `@Dell Fake attachment check`; confirm identical bytes under that remote demo agent's own workspace rather than a central Mini path.
+5. Restart the Hub and confirm the message metadata and exact download still work. Delete a disposable room containing an attachment and confirm its metadata, receipt, and stored file are removed.
+6. At 390 px, repeat selection, upload, send, and download; confirm chips and links remain usable without horizontal overflow.
+
 ### Rooms and phone
 
 1. Select **+ NEW**, create a room with only one agent member, and confirm it becomes active.
@@ -157,7 +172,7 @@ The launcher creates demo-only state under `runtime/`, generates a local connect
 6. Switch between Army and a project room and confirm their transcripts remain separate.
 7. At a narrow viewport, open and close the room and agent drawers.
 8. Open the agent form at phone width and confirm its fields and actions fit the viewport.
-9. At phone width, inspect a completed progress card, submit one native question, and reject another approval; confirm raw output, plan steps, full operation details, structured choices, and resulting execution states remain usable without horizontal overflow.
+9. At phone width, inspect a completed progress card, submit one native question, reject another approval, and send/download an attachment; confirm raw output, plan steps, full operation details, structured choices, attachment chips/links, and resulting execution states remain usable without horizontal overflow.
 
 Fake execution evidence is written beneath the agent's configured workspace. Initial demo paths include:
 
@@ -166,13 +181,13 @@ runtime/hub/mini-workspace/
 runtime/demo/dell-workspace/dell-fake/
 ```
 
-Each fake workspace contains `execution-proof.json`, `last-prompt.txt`, and `events.jsonl` after execution. Real OpenCode evidence consists of native task artifacts in its configured workspace plus the Hub's durable execution, progress, approval, and session records.
+Each fake workspace contains `execution-proof.json`, `last-prompt.txt`, and `events.jsonl` after execution; received attachment bytes appear under its `received-attachments/` directory. Real OpenCode evidence consists of native task artifacts in its configured workspace plus the Hub's durable execution, progress, approval, attachment metadata, and session records.
 
 ## Current limitations
 
 - The node named `demo-dell` runs on the current Mac. It proves transport and execution separation, not execution on the physical Dell.
 - OpenCode is the only real adapter. DSH, Hermes, and Grok adapters are not implemented.
-- Reusable teams, agent-to-agent delegation, attachments, generated-file return, and remote tool arbitration are not implemented.
+- Reusable teams, agent-to-agent delegation, generated-file return, and remote tool arbitration are not implemented.
 - Safe retry is limited to explicit pre-execution failures; interrupted and unknown outcomes require reconciliation rather than automatic resubmission. Real OpenCode active stop, descendant cleanup, one induced provider crash, and subsequent same-session recovery have passed the dedicated acceptance gate; broader provider, authentication, and usage-limit failures still require coverage.
 - OpenCode workspace acceptance is not an OS-level sandbox. Broader permission mediation and containment remain security work.
 - The remote-ACP demo uses authenticated raw TCP on loopback. Physical-machine deployment requires protected Tailscale transport or TLS and explicit binding rules in M4.

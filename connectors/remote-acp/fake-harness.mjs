@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } fr
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { textFromPrompt } from "./lib.mjs";
+import { attachmentsFromPrompt, textFromPrompt } from "./lib.mjs";
 
 const nodeId = process.env.OPENBOT_HUB_NODE_ID ?? "unknown-node";
 const title = process.env.OPENBOT_HUB_AGENT_TITLE ?? "Fake Agent";
@@ -163,6 +163,11 @@ const handlers = {
       session.simulatedFailures.push(text);
       saveSession(session);
       return fail(request, -32010, "Simulated pre-execution failure; safe to retry.");
+    }
+    const attachments = attachmentsFromPrompt(request.params.prompt);
+    if (attachments.length) mkdirSync(join(workspace, "received-attachments"), { recursive: true });
+    for (const attachment of attachments) {
+      writeFileSync(join(workspace, "received-attachments", attachment.id), attachment.content, { mode: 0o600 });
     }
     record(session, "user_message_chunk", text);
     writeFileSync(join(workspace, "last-prompt.txt"), `${text}\n`);
