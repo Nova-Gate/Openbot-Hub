@@ -163,9 +163,15 @@ export class AgentRuntime {
 
   async shutdown({ graceMs = 5_000 } = {}) {
     this.stopping = true;
+    const activeAgents = [...this.active.keys()];
     for (const [agentId, active] of this.active) this.clients.get(agentId)?.cancel(active.sessionId);
-    const inFlight = [...this.queues.values()].map((queue) => queue.catch(() => {}));
-    await Promise.race([Promise.allSettled(inFlight), delay(graceMs)]);
+    const draining = activeAgents.length
+      ? activeAgents.map((agentId) => this.queues.get(agentId)).filter(Boolean)
+      : [...this.queues.values()];
+    if (draining.length) {
+      const drainMs = activeAgents.length ? graceMs : Math.min(graceMs, 250);
+      await Promise.race([Promise.allSettled(draining.map((queue) => queue.catch(() => {}))), delay(drainMs)]);
+    }
     const clients = [...this.clients.values()];
     this.clients.clear();
     await Promise.all(clients.map((client) => client.stop().catch(() => {})));
