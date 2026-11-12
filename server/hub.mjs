@@ -47,11 +47,27 @@ const armyRoom = () => ({
 });
 
 export class Hub {
-  constructor({ root, statePath, agents = null, approvalTimeoutMs = 120_000 }) {
+  constructor({
+    root,
+    statePath,
+    agents = null,
+    approvalTimeoutMs = 600_000,
+    shutdownGraceMs = 5_000,
+    requestTimeoutMs = 120_000,
+    promptIdleTimeoutMs = 600_000,
+    promptAbsoluteTimeoutMs = 1_800_000,
+    cancelGraceMs = 2_000,
+  }) {
     this.root = root;
     this.statePath = statePath;
     this.configuredAgents = agents;
     this.approvalTimeoutMs = approvalTimeoutMs;
+    this.shutdownGraceMs = shutdownGraceMs;
+    this.requestTimeoutMs = requestTimeoutMs;
+    this.promptIdleTimeoutMs = promptIdleTimeoutMs;
+    this.promptAbsoluteTimeoutMs = promptAbsoluteTimeoutMs;
+    this.cancelGraceMs = cancelGraceMs;
+    this.stopping = false;
     this.listeners = new Set();
     this.state = null;
     this.runtime = null;
@@ -145,6 +161,10 @@ export class Hub {
       },
       onRequest: (request) => this.requestApproval(request),
       onNotification: (notification) => this.recordExecutionEvent(notification),
+      requestTimeoutMs: this.requestTimeoutMs,
+      promptIdleTimeoutMs: this.promptIdleTimeoutMs,
+      promptAbsoluteTimeoutMs: this.promptAbsoluteTimeoutMs,
+      cancelGraceMs: this.cancelGraceMs,
     });
     await mkdir(dirname(this.statePath), { recursive: true });
     await this.attachmentStore.init();
@@ -575,6 +595,7 @@ export class Hub {
     const pending = this.pendingApprovals.get(approval.id);
     this.pendingApprovals.delete(approval.id);
     const cancelled = approval.kind === "question" ? { action: "cancel" } : { outcome: { outcome: "cancelled" } };
+    if (!this.stopping) this.runtime.resumePromptTimers(approval.agentId);
     pending?.resolve(result ?? cancelled);
   }
 
@@ -625,13 +646,19 @@ export class Hub {
       responseContent: null,
       error: null,
     };
+    this.runtime.pausePromptTimers(agentId);
     this.state.approvals.push(approval);
     this.transitionExecution(execution, "waiting");
     const pending = new Promise((resolve) => this.pendingApprovals.set(approval.id, { resolve }));
     const timer = setTimeout(() => { void this.expireApproval(approval.id); }, this.approvalTimeoutMs);
     timer.unref();
     this.approvalTimers.set(approval.id, timer);
-    await this.save();
+    try {
+      await this.save();
+    } catch (error) {
+      this.runtime.resumePromptTimers(agentId);
+      throw error;
+    }
     this.emit("change");
     return pending;
   }
@@ -765,13 +792,13 @@ export class Hub {
         executionId,
         attachments,
         onStart: async () => {
-          if (execution.status !== "queued") return;
+          if (this.stopping || execution.status !== "queued") return;
           this.transitionExecution(execution, "running");
           await this.save();
           this.emit("change");
         },
       });
-      if (result.cancelled || execution.status !== "running") return execution;
+      if (this.stopping || result.cancelled || execution.status !== "running") return execution;
       const reply = {
         id: randomUUID(),
         roomId: origin.roomId,
@@ -790,7 +817,11 @@ export class Hub {
     } catch (error) {
       if (!["queued", "running", "waiting"].includes(execution.status)) return execution;
       const message = redactError(error.message);
-      this.interruptExecutionApprovals(execution.id, `Execution failed before a decision was completed: ${message}`);
+      const unknown = error.outcomeUnknown === true;
+      const summary = unknown
+        ? `Execution outcome unknown${error.timeout ? " (prompt timed out)" : ""}: ${message}`
+        : `Execution failed: ${message}`;
+      this.interruptExecutionApprovals(execution.id, `Execution ended before a decision was completed: ${message}`);
       const reply = {
         id: randomUUID(),
         roomId: execution.roomId,
@@ -799,12 +830,12 @@ export class Hub {
         authorName: agent?.name ?? execution.agentId,
         nodeId: agent?.nodeId,
         originId: execution.originId,
-        text: `Execution failed: ${message}`,
+        text: summary,
         createdAt: new Date().toISOString(),
       };
       this.state.messages.push(reply);
-      execution.retrySafe = error.retrySafe === true;
-      this.transitionExecution(execution, "failed", { error: message, resultMessageId: reply.id });
+      execution.retrySafe = unknown ? false : error.retrySafe === true;
+      this.transitionExecution(execution, unknown ? "unknown" : "failed", { error: summary, resultMessageId: reply.id });
       await this.save();
       this.emit("change");
     }
@@ -873,18 +904,27 @@ export class Hub {
   }
 
   async stop() {
-    const waiting = this.state.executions.filter((execution) => execution.status === "waiting");
-    for (const execution of waiting) {
-      const error = "The hub stopped while awaiting a decision; the outcome is unknown and it was not rerun.";
+    if (this.stopping) return;
+    this.stopping = true;
+    const queued = this.state.executions.filter((execution) => execution.status === "queued");
+    const active = this.state.executions.filter((execution) => ["running", "waiting"].includes(execution.status));
+    for (const execution of queued) {
+      const error = "The hub stopped before this execution started; it did not run and was not retried.";
+      this.runtime.cancel(execution.id);
+      execution.retrySafe = false;
+      this.transitionExecution(execution, "interrupted", { error });
+    }
+    for (const execution of active) {
+      const error = "The hub stopped while this execution was in progress; its outcome is unknown and it was not rerun.";
       this.runtime.cancel(execution.id);
       this.interruptExecutionApprovals(execution.id, error);
+      execution.retrySafe = false;
       this.transitionExecution(execution, "unknown", { error });
-      await this.runtime.interrupt(execution.agentId);
     }
-    if (waiting.length) await this.save();
-    await this.runtime.stop();
     for (const timer of this.approvalTimers.values()) clearTimeout(timer);
     this.approvalTimers.clear();
-    await this.saveQueue;
+    if (queued.length || active.length) await this.save().catch(() => {});
+    await this.runtime.shutdown({ graceMs: this.shutdownGraceMs });
+    await this.saveQueue.catch(() => {});
   }
 }

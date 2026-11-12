@@ -231,6 +231,8 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   .member-options { grid-template-columns: 1fr; }
   .dialog-actions { flex-wrap: wrap; }
 }
+.room-badge { margin-left: auto; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border: 1px solid var(--navy); border-radius: 20px; background: var(--pink); font-family: var(--mono); font-size: 10px; font-weight: 800; }
+.approval-countdown { width: fit-content; border-radius: 20px; padding: 2px 8px; background: var(--light-yellow); color: var(--navy); font-family: var(--mono); font-size: 9px; letter-spacing: .05em; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }

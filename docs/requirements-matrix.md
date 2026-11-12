@@ -2,6 +2,8 @@
 
 This is the implementation and acceptance index for `docs/product-requirements.md`. Update it whenever requirement status or evidence changes.
 
+Every evidence entry must cite the commit SHA it ran against, the run date, and the Node, harness, and adapter versions exercised. A report without provenance is a claim, not evidence.
+
 ## Evidence commands
 
 - **CHECK:** `npm run check` — JavaScript syntax validation.
@@ -10,6 +12,7 @@ This is the implementation and acceptance index for `docs/product-requirements.m
 - **ACP:** `node --test tests/remote-acp.test.mjs` — connector execution, workspace proof, resume, and credential rejection.
 - **FILE:** `node --test tests/attachments.test.mjs` — binary upload, exact hashes, retry deduplication/conflicts, size/type/path/content rejection, aborted transfer cleanup, one-room/one-message rules, identical Mini/remote-Dell delivery, restart-safe downloads, delayed-upload/deletion race protection, aborted-upload guard release, legacy state, and room-deletion cleanup.
 - **SUP:** `node --test tests/supervision.test.mjs` — connectivity, startup-failure containment, redaction, unique workspaces, concurrent idempotency, queue ordering, fake stop, safe retry, and active-deletion safeguards.
+- **LIFE:** `node --test tests/lifecycle.test.mjs` — idle and absolute prompt timeouts with cancellation and process-group cleanup, pre-dispatch versus post-dispatch classification, approval-paused timers, shutdown terminal states, no reply after stop begins, orphan cleanup, non-overlapping recovery, and a real SIGTERM deadline.
 - **DEC:** `node --test tests/approvals.test.mjs tests/elicitation.test.mjs` — native `elicitation/create` questions, complete/redacted operation details, permission allow/reject, question accept/decline/cancel, session binding, invalid/repeated decisions, expiry, waiting stop, active-modification guards, restart recovery, the persistence-decision race, and ACP process-group cleanup.
 - **CI:** `.github/workflows/test.yml` — runs CHECK and all offline tests for every PR and push to `main`; browser and live provider evidence remains local.
 - **UI:** `npm run test:ui` — isolated Chrome desktop and 390 px phone acceptance, including real file-input upload, hash/status chips, room locking, message metadata, exact downloads and fake-agent bytes, pending/completed tool and plan progress, raw command/output, failure rendering, node labels, visible permission command/path/diff details, and native question accept/decline flows; artifacts are written under ignored `artifacts/ui-validation/`.
@@ -17,14 +20,15 @@ This is the implementation and acceptance index for `docs/product-requirements.m
 - **REAL-SUP:** `npm run test:opencode-supervision` — five small live calls proving native permission approval with complete operation details, a real OpenCode form question, active stop, induced provider failure, descendant cleanup, and post-failure recovery in the same native session; report under ignored `artifacts/opencode-supervision/`.
 - **SVC:** `launchctl print gui/$(id -u)/com.molaoshi.openbot-hub` plus health/state checks and an intentional `kickstart -k` restart.
 
-`npm test` runs APP, PROG, ACP, FILE, SUP, and DEC. UI requires macOS and Google Chrome. Future physical-phone, Dell, MacBook, security, and backup gates require their own recorded evidence; local simulation is not a substitute.
+`npm test` runs APP, PROG, ACP, FILE, SUP, DEC, and LIFE. UI requires macOS and Google Chrome. Future physical-phone, Dell, MacBook, security, and backup gates require their own recorded evidence; local simulation is not a substitute.
 
 ## Status summary
 
 - **M0:** Local foundation; mostly complete, with broader requirements still partial.
-- **M1:** Complete, including real OpenCode stop/failure supervision under EXEC-03.
+- **M1:** Exit gate passed 2026-11-02, but EXEC-03 is now Partial: the 2026-11-12 review found that shutdown drains instead of interrupting and that the prompt timeout does not cancel the native turn. M1 re-closes when the lifecycle gate passes.
 - **M2:** Active; real OpenCode native execution, session resume, supervision, detailed approvals, native form questions, rich progress, and deliberate attachments passed on 2026-11-03, while FILE-02 generated-file return remains open.
 - **M3–M5:** Planned; see `docs/migration-plan.md`.
+- **Lifecycle change:** implemented and offline-verified on 2026-11-12 (LIFE 6/6, 31/31 offline, UI acceptance). The live REAL-SUP gate is not reproducible on OpenCode 2.2.5 because the agent intermittently declines the required tools; EXEC-03 and EXEC-04 stay Partial until a live re-run passes. FILE-02 remains next.
 - No P0/P1 requirement may be called Done from implementation alone; the evidence column must actually pass.
 
 ## Core application and state
@@ -59,8 +63,8 @@ This is the implementation and acceptance index for `docs/product-requirements.m
 |---|---|---|---|
 | EXEC-01 | M1 | Done | SUP proves concurrent duplicate-post suppression, per-agent queued/running order, and ordered replies; APP retains single-post idempotency coverage. |
 | EXEC-02 | M1 | Done | APP/SUP/DEC verify persisted queued/running/waiting/completed/failed/interrupted/unknown histories and result links; REAL-SUP verifies waiting/running transitions on OpenCode; UI exposes applicable states without false success. |
-| EXEC-03 | M1 | Done | SUP and UI stop queued/active fake turns; DEC proves process-group cleanup. REAL-SUP passes real active stop, stopped-tool cleanup, induced provider failure, crashed-tool cleanup, a fresh ACP process, and subsequent execution in the same native session. |
-| EXEC-04 | M1 | Done | APP/SUP prove unknown recovery without reruns, rejected unknown/interrupted retries, one known-safe fail-once retry, and completed attempt-two linking; UI exercises safe retry. |
+| EXEC-03 | M1 | Partial | SUP and UI stop queued/active fake turns; DEC proves process-group cleanup; REAL-SUP passes real active stop, stopped-tool cleanup, induced provider failure, crashed-tool cleanup, a fresh ACP process, and same-session recovery. **Fixed and offline-verified:** configurable idle/absolute prompt timeouts with `session/cancel`, bounded grace and process-group kill, no overlap, and bounded shutdown with terminal states and no orphans (LIFE 6/6, SIGTERM exit 929 ms). **Blocker:** live REAL-SUP has not passed on OpenCode 2.2.5. |
+| EXEC-04 | M1 | Partial | APP/SUP prove unknown recovery without reruns, rejected unknown/interrupted retries, one known-safe fail-once retry, and completed attempt-two linking; UI exercises safe retry. **Fixed and offline-verified:** a post-dispatch timeout or transport loss records `unknown`, a pre-dispatch failure records `failed`, and retry safety stays limited to `-32010` (LIFE). **Blocker:** live REAL-SUP has not passed on OpenCode 2.2.5. |
 | EXEC-05 | M2 | Done | DEC's 9 tests pass native `elicitation/create` questions, structured accept/decline/cancel, backend string-pattern rejection, complete/redacted operation details, permission allow/reject, wrong-session rejection, invalid/repeated decisions, expiry, waiting stop, terminal persistence, restart recovery, and the exact persistence-decision race. UI passes detailed desktop/mobile approval, native question flows, and `0.5` decimal submission with `step="any"`; REAL-SUP passes five calls including a detailed native OpenCode permission and genuine form-question round trip in the same session. |
 | EXEC-06 | M2 | Done | PROG passes tool/plan normalization and redaction, pending-to-completed coalescing, raw input/output preservation, authoritative `mac-mini`/`demo-dell` attribution, restart persistence, and legacy execution loading. UI passes pending/completed progress, command/output, plan, failure, node-label, and 390 px overflow checks. REAL passes one completed native OpenCode tool with result evidence and `mac-mini` attribution, plus zero replay duplicates after restart. |
 | EXEC-07 | M2 | Done | ACP proves fake node/workspace/hostname evidence; REAL verifies OpenCode `mac-mini` reply identity, origin linkage, exact workspace file content, and no unexpected task artifacts elsewhere in the isolated acceptance root. Physical-node evidence remains under M4. |
@@ -71,8 +75,8 @@ This is the implementation and acceptance index for `docs/product-requirements.m
 |---|---|---|---|
 | TEAM-01 | M3 | Planned | Create/edit/delete a team and verify team mentions reach only enabled members. |
 | TEAM-02 | M3 | Planned | Scripted cross-agent delegation must preserve origin, room, node, routing, and depth limits. |
-| TEAM-03 | M3 | Planned | Shared task state and synthesized results must survive restart and appear once in the originating room. |
-| TEAM-04 | M3 | Planned | Force a cross-node delegation chain and prove the global budget stops it without transport-event consumption. |
+| TEAM-03 | M3 | Planned | Shared task state with one accountable owner per task, plus synthesized results that survive restart and appear once in the originating room. |
+| TEAM-04 | M3 | Planned | Force a cross-node delegation chain and prove the global budget stops it without transport-event consumption. Interim: the six-turn cap stands, and `@everyone` beyond it must fail with an actionable message. |
 
 ## Files
 
@@ -117,6 +121,33 @@ This is the implementation and acceptance index for `docs/product-requirements.m
 | EXP-01 | Post-V1 | Planned | Prioritize only after observed daily-use needs; define search/notification acceptance separately. |
 | EXP-02 | Post-V1 | Planned | Schedule only after execution recovery and duplicate-prevention gates pass. |
 
+## Explicitly excluded from V1
+
+These OpenBot-parity features are deliberately outside V1. They stay excluded unless Mo approves a scope change, and recording them prevents "full-feature V1" from being claimed through omission.
+
+| ID | Status | Reason |
+|---|---|---|
+| EXCL-01 | Excluded | A dedicated selected-lead workflow beyond the per-task owner attribution in TEAM-03. |
+| EXCL-02 | Excluded | Task revisions and versioned task history. |
+| EXCL-03 | Excluded | Continue and Reassign controls. |
+| EXCL-04 | Excluded | Archive and Restore of rooms and tasks. |
+
+## Execution lifecycle change (2026-11-12)
+
+Requirements: EXEC-02, EXEC-03, EXEC-04, EXEC-05 (approval-deadline visibility), CORE-02 and OPS-01 (shutdown evidence).
+
+Implemented: configurable idle and absolute prompt timeouts with `session/cancel`, bounded grace and process-group kill; dispatch-aware `unknown` versus `failed`; approval-paused timers with a visible deadline and room badge; bounded SIGTERM shutdown that interrupts queued work and marks running work `unknown`.
+
+Evidence:
+
+- **LIFE:** 6/6 pass — an idle timeout becomes `unknown`, its process is gone, and the next turn runs alone with no overlap; a pre-dispatch failure is `failed`; a post-dispatch transport loss is `unknown`; approvals pause the idle timer; shutdown leaves `unknown` and `interrupted` with no reply written after stopping; a real SIGTERM exits in 929 ms with no orphan process.
+- **Offline suite:** 31/31 pass on Node 26.7.0.
+- **UI:** pass, including `.approval-countdown` and `.room-badge` assertions, with no runtime exceptions.
+
+Blocked: the live REAL-SUP gate. Five attempts on 2026-11-12 against OpenCode CLI 2.2.5 failed at different tool-use steps (the agent answered without asking, declined `sleep 60`, or skipped the permission request). Approval and question round trips each passed in at least one attempt. The November evidence was produced with CLI 2.0.26, which is no longer installed, so EXEC-03 and EXEC-04 stay Partial until a live run against the installed CLI passes.
+
+Gate for FILE-02 and M3: a green REAL-SUP run, then re-run LIFE and the real file/session gate for regression.
+
 ## Current release conclusion
 
-OpenBot Hub is a verified local application with M1 supervision complete and M2 active, not full-feature V1. All 25 offline tests pass, desktop and 390 px browser acceptance passes, and one real OpenCode adapter has passed five supervision calls plus the separate two-call file/session gate, covering native file and embedded-resource attachment delivery, identity, lifecycle, session resume, completed real tool progress with no replay duplicates, detailed permission, genuine form-question, stop/failure supervision, and descendant cleanup. FILE-01 is Done; FILE-02 generated-file return and the complete M2 exit gate remain open. Physical devices, other real harnesses, and production readiness must not be inferred from this local adapter or phone-sized-browser evidence.
+OpenBot Hub is a verified local application with M2 active, not full-feature V1. The 2026-11-12 lifecycle change implements the EXEC-03 and EXEC-04 fixes and passes its offline gate, but both stay Partial until the live supervision gate passes on the installed CLI. All 31 offline tests pass, desktop and 390 px browser acceptance passes, and one real OpenCode adapter has passed five supervision calls plus the separate two-call file/session gate on CLI 2.0.26, covering native file and embedded-resource attachment delivery, identity, lifecycle, session resume, completed real tool progress with no replay duplicates, detailed permission, genuine form-question, stop/failure supervision, and descendant cleanup. FILE-01 is Done; FILE-02 generated-file return and the complete M2 exit gate remain open. Physical devices, other real harnesses, and production readiness must not be inferred from this local adapter or phone-sized-browser evidence.

@@ -18,11 +18,30 @@ const host = option("host", "127.0.0.1");
 const port = Number(option("port", "7100"));
 const statePath = resolve(root, option("state", "runtime/hub/state.json"));
 const agentsPath = option("agents", null);
-const approvalTimeoutMs = Number(option("approval-timeout-ms", "120000"));
-if (!Number.isFinite(approvalTimeoutMs) || approvalTimeoutMs < 100) throw new Error("Approval timeout must be at least 100 ms.");
+const milliseconds = (name, fallback, minimum) => {
+  const value = Number(option(name, String(fallback)));
+  if (!Number.isFinite(value) || value < minimum) throw new Error(`--${name} must be a number of at least ${minimum} ms.`);
+  return value;
+};
+const approvalTimeoutMs = milliseconds("approval-timeout-ms", 600_000, 100);
+const requestTimeoutMs = milliseconds("request-timeout-ms", 120_000, 100);
+const promptIdleTimeoutMs = milliseconds("prompt-idle-timeout-ms", 600_000, 100);
+const promptAbsoluteTimeoutMs = milliseconds("prompt-absolute-timeout-ms", 1_800_000, 1_000);
+const shutdownGraceMs = milliseconds("shutdown-grace-ms", 5_000, 0);
+const shutdownDeadlineMs = milliseconds("shutdown-deadline-ms", 8_000, 1_000);
+if (shutdownDeadlineMs <= shutdownGraceMs) throw new Error("--shutdown-deadline-ms must exceed --shutdown-grace-ms.");
 const agents = agentsPath ? JSON.parse(await readFile(resolve(root, agentsPath), "utf8")) : null;
 if (agents !== null && !Array.isArray(agents)) throw new Error("Agent configuration must be a JSON array.");
-const hub = new Hub({ root, statePath, agents, approvalTimeoutMs });
+const hub = new Hub({
+  root,
+  statePath,
+  agents,
+  approvalTimeoutMs,
+  requestTimeoutMs,
+  promptIdleTimeoutMs,
+  promptAbsoluteTimeoutMs,
+  shutdownGraceMs,
+});
 await hub.load();
 
 const mime = {
@@ -174,10 +193,24 @@ server.listen(port, host, () => {
   const actualPort = typeof address === "object" && address ? address.port : port;
   console.log(JSON.stringify({ type: "openbot-hub.ready", url: `http://${host}:${actualPort}/` }));
 });
+let stopping = false;
 const stop = async () => {
-  server.closeAllConnections();
-  await hub.stop();
+  if (stopping) return;
+  stopping = true;
+  const deadline = setTimeout(() => {
+    console.error(`OpenBot Hub shutdown exceeded ${shutdownDeadlineMs} ms; exiting with terminal states already persisted.`);
+    process.exit(1);
+  }, shutdownDeadlineMs);
+  try {
+    server.closeAllConnections();
+    await hub.stop();
+  } catch (error) {
+    console.error(`OpenBot Hub shutdown failed: ${redactError(error.message)}`);
+  } finally {
+    clearTimeout(deadline);
+  }
   server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 1_000).unref();
 };
-process.once("SIGINT", stop);
-process.once("SIGTERM", stop);
+process.once("SIGINT", () => void stop());
+process.once("SIGTERM", () => void stop());

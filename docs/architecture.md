@@ -121,6 +121,10 @@ A repeated client message ID returns the original receipt and starts no new exec
 - Permission and question decisions are bound to the exact execution and native session. Pending decisions cannot be answered twice, answered with an invalid value, or resumed after stop, expiry, provider failure, or restart. The pending resolver and expiry timer are registered before persistence, so a recorded selection cannot be returned to ACP as a cancellation.
 - Active agents cannot be edited or removed; room deletion is blocked during active work or attachment uploads. Once those settle, deletion removes that room's execution and approval history plus attachment metadata, upload receipts, and stored files. Pending-upload guards release on success and failure.
 - Provider and connector errors are redacted before health records, execution history, room messages, or HTTP responses persist or display them. Progress titles and operation payloads use the same redaction path, retained events are capped, and an event-persistence failure rejects the active prompt rather than reporting false success.
+- `unknown` is a distinct outcome, not a synonym for `failed`: the side effect may already have happened. It is surfaced in the room, never retried automatically, and must be reconciled before resending. A failure that provably happened before dispatch is the only kind eligible for safe retry, and today that means the existing `-32010` rule.
+- Prompt timeouts are idle-based and reset on every `session/update`, are paused while a decision is pending, and are bounded by an absolute cap. On timeout the Hub sends `session/cancel`, waits a short grace, then kills the process group, and records `unknown` because the turn may have run.
+- A transport loss after dispatch records `unknown`; a failure proven to occur before dispatch records `failed`. Retry safety is unchanged and still requires `-32010`.
+- Shutdown stops accepting work, marks queued runs `interrupted` and running or waiting runs `unknown`, resolves pending approvals, cancels active prompts, waits a bounded grace, kills process groups, and persists terminal state before exiting. SIGTERM has a hard deadline independent of that grace.
 
 ## Workspace and tool rules
 
@@ -153,10 +157,17 @@ Implemented and tested:
 - Real OpenCode detailed permission, native form-question, active-stop, provider-failure, descendant-cleanup, and post-failure recovery acceptance.
 - Room-bound approval/rejection and native question accept/decline/cancel controls on desktop and at 390 px.
 - Desktop and 390 px mobile chat, drawer, attachment, management-form, and OpenCode-form acceptance.
+- Configurable idle and absolute prompt timeouts, `session/cancel` with bounded grace and process-group kill, dispatch-aware `unknown` versus `failed` classification, approval-paused timers with a visible deadline and room badge, and bounded SIGTERM shutdown, covered by `tests/lifecycle.test.mjs`.
+
+Known gaps (open):
+
+- A remote agent's `session/new` and `session/load` receive the Hub-side workspace path as `cwd`; the connector passes it through unchanged, so the first real remote harness would be handed a Mac mini path.
+- Attachment bytes uploaded from a compose that is never sent cannot be deleted; they live until the whole room is deleted.
+- Mention routing still matches a leading prefix without a word boundary, and message idempotency keys are global rather than room-scoped; both are fixed in the correctness sweep.
 
 Not yet implemented:
 
-- Reusable teams and controlled delegation.
+- Reusable teams and controlled delegation, including per-task owner attribution (TEAM-03).
 - Physical Dell and MacBook enrollment.
 - DSH, Hermes, or Grok adapters.
 - Generated-file return.

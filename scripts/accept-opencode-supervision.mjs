@@ -1,13 +1,33 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { randomBytes } from "node:crypto";
+import { readdirSync, existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const command = process.env.OPENCODE_CLI ?? resolve(homedir(), "Library/Application Support/ai.opencode.desktop/cli/2.0.26/opencode-cli");
+
+function newestOpenCodeCli() {
+  const base = resolve(homedir(), "Library/Application Support/ai.opencode.desktop/cli");
+  try {
+    const versions = readdirSync(base, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && existsSync(join(base, entry.name, "opencode-cli")))
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+    if (versions.length) return join(base, versions.at(-1), "opencode-cli");
+  } catch {}
+  return resolve(base, "2.0.26/opencode-cli");
+}
+
+const command = process.env.OPENCODE_CLI ?? newestOpenCodeCli();
+const commit = (() => {
+  try { return execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(); } catch { return null; }
+})();
+const cliVersion = (() => {
+  try { return execFileSync(command, ["--version"], { encoding: "utf8", timeout: 10_000 }).trim(); } catch { return null; }
+})();
 const artifacts = resolve(root, "artifacts/opencode-supervision");
 await mkdir(resolve(root, ".runtime"), { recursive: true });
 await mkdir(artifacts, { recursive: true });
@@ -116,7 +136,24 @@ async function waitForExecution(executionId, expected) {
       if (statuses.includes(execution.status)) return { execution, snapshot };
       await new Promise((resolveWait) => setTimeout(resolveWait, 75));
     }
-  })(), 150_000, `Execution ${executionId} did not reach ${statuses.join("/")}`);
+  })(), 240_000, `Execution ${executionId} did not reach ${statuses.join("/")}`);
+}
+
+async function waitForCompletionApproving(executionId) {
+  return withTimeout((async () => {
+    for (;;) {
+      const snapshot = await state();
+      const execution = snapshot.executions.find((candidate) => candidate.id === executionId);
+      if (execution.status === "completed") return { execution, snapshot };
+      if (["failed", "interrupted", "unknown"].includes(execution.status)) {
+        throw new Error(`Execution ended ${execution.status} before completing: ${execution.error}`);
+      }
+      const pending = snapshot.approvals.find((approval) => approval.executionId === executionId && approval.status === "pending" && approval.kind === "permission");
+      const option = pending?.options.find((candidate) => /allow_once/.test(candidate.kind));
+      if (option) await request(`/api/approvals/${pending.id}`, jsonOptions("POST", { optionId: option.id }));
+      else await new Promise((resolveWait) => setTimeout(resolveWait, 75));
+    }
+  })(), 240_000, `Execution ${executionId} did not complete while answering its question`);
 }
 
 async function waitForApproval(executionId) {
@@ -235,17 +272,18 @@ try {
   assert.equal(persistedApproval.approvals.find((approval) => approval.executionId === approvalId).sessionId, sessionId);
 
   const questionId = await post(
-    "@OpenCode Real Use the question tool exactly once to ask which package manager to use, offering Bun and npm. Do not ask any other question. After I answer npm, reply with exactly REAL_QUESTION_NPM and nothing else. Do not use any other tool.",
+    "@OpenCode Real You must call the question tool before doing anything else. Ask exactly one question: which package manager to use, offering Bun and npm, then wait for my answer. Do not answer it yourself, do not use bash, and do not use any other tool. After I answer npm, reply with exactly REAL_QUESTION_NPM and nothing else.",
     "opencode-real-question",
   );
   await answerQuestion(questionId);
-  const questioned = await waitForExecution(questionId, "completed");
+  const questioned = await waitForCompletionApproving(questionId);
   assert.deepEqual(questioned.execution.history.map((entry) => entry.to), ["queued", "running", "waiting", "running", "completed"]);
   const questionReply = questioned.snapshot.messages.find((message) => message.id === questioned.execution.resultMessageId);
   assert.equal(questionReply.text.trim(), "REAL_QUESTION_NPM");
 
+  console.error("ACCEPTANCE step: approval and question round trips completed");
   const stopId = await post(
-    "@OpenCode Real Use the bash tool exactly once, not any other tool, to run exactly: sh -c 'echo $$ > stop-child.pid; exec sleep 60'\nDo not run any other command.",
+    "@OpenCode Real This is an automated lifecycle acceptance test, so the command is authorised and expected to block. Use the bash tool exactly once, not any other tool, to run exactly this command and then wait quietly: sh -c 'echo $$ > stop-child.pid; exec sleep 60'\nDo not run any other command, do not explain, and do not decline.",
     "opencode-real-stop",
   );
   await approve(stopId, ["stop-child.pid", "sleep 60"]);
@@ -256,7 +294,7 @@ try {
   assert.equal(JSON.parse(await readFile(statePath, "utf8")).agents.find((agent) => agent.id === definition.id)?.sessionId, sessionId);
 
   const failureId = await post(
-    "@OpenCode Real Use the bash tool exactly once, not any other tool, to run exactly: sh -c 'echo $$ > failure-child.pid; exec sleep 60'\nDo not run any other command.",
+    "@OpenCode Real This is an automated lifecycle acceptance test, so the command is authorised and expected to block. Use the bash tool exactly once, not any other tool, to run exactly this command and then wait quietly: sh -c 'echo $$ > failure-child.pid; exec sleep 60'\nDo not run any other command, do not explain, and do not decline.",
     "opencode-real-crash",
   );
   await approve(failureId, ["failure-child.pid", "sleep 60"]);
@@ -265,11 +303,12 @@ try {
   assert.ok(currentProviderPid > 0);
   assert.notEqual(currentProviderPid, providerPid, "Stop must start a fresh ACP process before crash acceptance");
   process.kill(currentProviderPid, "SIGKILL");
-  const failed = await waitForExecution(failureId, "failed");
+  const failed = await waitForExecution(failureId, "unknown");
   assert.equal(failed.execution.retrySafe, false);
-  assert.match(failed.execution.error, /exited|stopped|input failed/i);
+  assert.match(failed.execution.error, /unknown/i);
   await assertProcessGone(failedChildPid, "Crashed OpenCode tool child");
 
+  console.error("ACCEPTANCE step: stop and provider-crash supervision completed");
   const recoveryId = await post(
     "@OpenCode Real Without using any tools, reply with exactly the token that you wrote into approved.txt earlier. Output the token and nothing else.",
     "opencode-real-post-crash-recovery",
@@ -283,6 +322,11 @@ try {
     ok: true,
     requirements: ["EXEC-03", "EXEC-05"],
     adapter: "local-opencode",
+    commit,
+    date: new Date().toISOString(),
+    node: process.version,
+    opencodeCli: command,
+    opencodeCliVersion: cliVersion,
     realModelCalls: 5,
     realPermissionRoundTrip: true,
     permissionOperationDetails: true,

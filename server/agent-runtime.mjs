@@ -2,17 +2,31 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { AcpClient } from "./acp-client.mjs";
 
+const delay = (milliseconds) => new Promise((resolveWait) => setTimeout(resolveWait, milliseconds));
+
 export class AgentRuntime {
-  constructor({ root, agents, onSession, onRequest, onNotification }) {
+  constructor({
+    root,
+    agents,
+    onSession,
+    onRequest,
+    onNotification,
+    requestTimeoutMs = 120_000,
+    promptIdleTimeoutMs = 600_000,
+    promptAbsoluteTimeoutMs = 1_800_000,
+    cancelGraceMs = 2_000,
+  }) {
     this.root = root;
     this.agents = agents;
     this.onSession = onSession;
     this.onRequest = onRequest;
     this.onNotification = onNotification;
+    this.options = { requestTimeoutMs, promptIdleTimeoutMs, promptAbsoluteTimeoutMs, cancelGraceMs };
     this.clients = new Map();
     this.queues = new Map();
     this.cancellations = new Set();
     this.active = new Map();
+    this.stopping = false;
   }
 
   definition(agentId) {
@@ -27,7 +41,7 @@ export class AgentRuntime {
 
   client(agent) {
     if (this.clients.has(agent.id)) return this.clients.get(agent.id);
-    const common = { cwd: this.root };
+    const common = { cwd: this.root, ...this.options };
     let client;
     if (agent.transport === "remote-acp") {
       client = new AcpClient({
@@ -37,6 +51,7 @@ export class AgentRuntime {
       });
     } else if (agent.transport === "local-opencode") {
       client = new AcpClient({
+        ...common,
         command: agent.command,
         args: ["acp"],
         cwd: this.workspace(agent),
@@ -74,20 +89,31 @@ export class AgentRuntime {
   }
 
   run(agentId, sessionId, text, { executionId, attachments = [], onStart = async () => {} } = {}) {
+    if (this.stopping) return Promise.resolve({ cancelled: true });
     const previous = this.queues.get(agentId) ?? Promise.resolve();
-    const next = previous.then(async () => {
-      if (this.cancellations.has(executionId)) return { cancelled: true };
+    const next = previous.catch(() => {}).then(async () => {
+      if (this.stopping || this.cancellations.has(executionId)) return { cancelled: true };
       await onStart();
-      if (this.cancellations.has(executionId)) return { cancelled: true };
+      if (this.stopping || this.cancellations.has(executionId)) return { cancelled: true };
       const agent = this.definition(agentId);
       const centralWorkspace = this.workspace(agent);
       await mkdir(centralWorkspace, { recursive: true });
       const client = this.client(agent);
-      const actualSession = await client.ensureSession(sessionId, centralWorkspace);
+      let actualSession;
+      try {
+        actualSession = await client.ensureSession(sessionId, centralWorkspace);
+      } catch (error) {
+        error.dispatched = false;
+        error.outcomeUnknown = false;
+        throw error;
+      }
       if (actualSession !== sessionId) await this.onSession(agentId, actualSession);
       this.active.set(agentId, { executionId, sessionId: actualSession });
       try {
         return await client.prompt(actualSession, text, attachments);
+      } catch (error) {
+        if (error.fatal) this.clients.delete(agentId);
+        throw error;
       } finally {
         this.active.delete(agentId);
       }
@@ -98,6 +124,14 @@ export class AgentRuntime {
 
   cancel(executionId) {
     this.cancellations.add(executionId);
+  }
+
+  pausePromptTimers(agentId) {
+    this.clients.get(agentId)?.pausePromptTimers();
+  }
+
+  resumePromptTimers(agentId) {
+    this.clients.get(agentId)?.resumePromptTimers();
   }
 
   async test(agentId) {
@@ -115,15 +149,30 @@ export class AgentRuntime {
   }
 
   async stopAgent(agentId) {
-    const queued = this.queues.get(agentId);
-    if (queued) await queued;
-    this.queues.delete(agentId);
     const client = this.clients.get(agentId);
-    if (client) await client.stop();
-    this.clients.delete(agentId);
+    const active = this.active.get(agentId);
+    if (client) {
+      if (active) client.cancel(active.sessionId);
+      this.clients.delete(agentId);
+      await client.stop();
+    }
+    this.queues.delete(agentId);
+  }
+
+  async shutdown({ graceMs = 5_000 } = {}) {
+    this.stopping = true;
+    for (const [agentId, active] of this.active) this.clients.get(agentId)?.cancel(active.sessionId);
+    const inFlight = [...this.queues.values()].map((queue) => queue.catch(() => {}));
+    await Promise.race([Promise.allSettled(inFlight), delay(graceMs)]);
+    for (const [agentId, client] of [...this.clients]) {
+      this.clients.delete(agentId);
+      await client.stop().catch(() => {});
+    }
+    this.queues.clear();
+    this.active.clear();
   }
 
   async stop() {
-    await Promise.all([...this.clients.keys()].map((agentId) => this.stopAgent(agentId)));
+    await this.shutdown({ graceMs: 2_000 });
   }
 }
