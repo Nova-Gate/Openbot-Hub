@@ -122,8 +122,19 @@ export class Hub {
         error: "The hub restarted before this decision was answered; the execution outcome is unknown.",
       };
     });
+    const savedReceipts = saved?.receipts ?? {};
+    const receipts = {};
+    for (const [key, messageId] of Object.entries(savedReceipts)) {
+      const scoped = rooms.some((room) => key.startsWith(`${room.id}:`));
+      if (scoped) {
+        receipts[key] = messageId;
+        continue;
+      }
+      const roomId = (saved?.messages ?? []).find((message) => message.id === messageId)?.roomId ?? "army";
+      receipts[`${roomId}:${key}`] = messageId;
+    }
     this.state = {
-      version: 6,
+      version: 7,
       rooms,
       agentDefinitions: definitions.map((agent) => ({ ...agent, enabled: agent.enabled !== false })),
       agents: definitions.map((definition) => {
@@ -147,7 +158,7 @@ export class Hub {
       approvals,
       attachments: saved?.attachments ?? [],
       attachmentReceipts: saved?.attachmentReceipts ?? {},
-      receipts: saved?.receipts ?? {},
+      receipts,
     };
     this.runtime = new AgentRuntime({
       root: this.root,
@@ -221,14 +232,23 @@ export class Hub {
   }
 
   recipients(text, room) {
-    const normalized = text.trimStart().toLowerCase();
     const members = this.members(room);
-    if (normalized.startsWith("@everyone")) return members.map((agent) => agent.id);
+    let rest = text.trimStart().toLowerCase();
+    if (!rest.startsWith("@")) return [];
+    if (/^@everyone(?=$|[\s,;:])/.test(rest)) return members.map((agent) => agent.id);
     const selected = [];
-    for (const agent of [...members].sort((a, b) => b.name.length - a.name.length)) {
-      if (normalized.startsWith(`@${agent.name.toLowerCase()}`)) selected.push(agent.id);
+    while (rest.startsWith("@")) {
+      const match = members
+        .map((agent) => ({ agent, name: agent.name.toLowerCase() }))
+        .filter(({ name }) => rest.startsWith(`@${name}`))
+        .map(({ agent, name }) => ({ agent, end: 1 + name.length }))
+        .filter(({ end }) => end >= rest.length || /[\s,;:]/.test(rest[end]))
+        .sort((left, right) => right.end - left.end)[0];
+      if (!match) break;
+      selected.push(match.agent.id);
+      rest = rest.slice(match.end).trimStart();
     }
-    return selected;
+    return [...new Set(selected)];
   }
 
   roomName(value, excludeId = null) {
@@ -506,7 +526,8 @@ export class Hub {
     if (messageText.length > 16_000) throw problem("Message is too long.", 413);
     const room = this.room(roomId);
     const receipt = clean(clientMessageId).slice(0, 128) || randomUUID();
-    const existingId = this.state.receipts[receipt];
+    const receiptKey = `${room.id}:${receipt}`;
+    const existingId = this.state.receipts[receiptKey];
     if (existingId) {
       return { message: this.state.messages.find((message) => message.id === existingId), recipients: [], executions: [], duplicate: true };
     }
@@ -560,8 +581,17 @@ export class Hub {
     });
     this.state.messages.push(message);
     this.state.executions.push(...executions);
-    this.state.receipts[receipt] = message.id;
-    await this.save();
+    this.state.receipts[receiptKey] = message.id;
+    try {
+      await this.save();
+    } catch (error) {
+      this.state.messages = this.state.messages.filter((candidate) => candidate.id !== message.id);
+      const failedExecutions = new Set(executions.map((execution) => execution.id));
+      this.state.executions = this.state.executions.filter((candidate) => !failedExecutions.has(candidate.id));
+      if (this.state.receipts[receiptKey] === message.id) delete this.state.receipts[receiptKey];
+      for (const attachment of attachments) attachment.messageId = null;
+      throw error;
+    }
     this.emit("change");
     for (const execution of executions) void this.execute(execution.id);
     return { message, recipients, executions, duplicate: false };
