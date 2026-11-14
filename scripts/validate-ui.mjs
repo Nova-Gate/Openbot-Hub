@@ -237,6 +237,9 @@ try {
     const card = document.querySelector('.approval-card[data-status="pending"]');
     return card.textContent.includes("printf 'approved\\\\n' > approval-proof.txt") && card.textContent.includes('approval-proof.txt:1') && card.textContent.includes('--- old text') && card.textContent.includes('+++ new text');
   })()`);
+  await new Promise((resolveWait) => setTimeout(resolveWait, 1_200));
+  const approvalCountdown = await cdp.evaluate(`Boolean(document.querySelector('.approval-card[data-status="pending"] .approval-countdown')) && /DECISION DEADLINE/.test(document.querySelector('.approval-card[data-status="pending"] .approval-countdown').textContent)`);
+  const pendingBadge = await cdp.evaluate(`Boolean(document.querySelector('.room-row .room-badge'))`);
   await cdp.evaluate(`document.querySelector('.execution-card[data-status="waiting"] .approval-option[data-option-id="allow_once"]').click()`);
   await cdp.wait(`document.querySelector('.approval-card[data-status="approved"]') && document.querySelector('#messages').textContent.includes('Received: @Mini Fake approval browser decision')`);
   const approvalUi = await cdp.evaluate(`Boolean(document.querySelector('.approval-card[data-status="approved"]')) && !document.querySelector('.execution-card[data-status="waiting"] .approval-option')`);
@@ -269,7 +272,7 @@ try {
   })()`);
   const decimalSubmission = decimalForm.step === 'any' && decimalForm.valid && !decimalForm.stepMismatch && questionUi;
 
-  const supervision = { executionVisible, connectivity, failureUi, retryUi, progressUi, stoppedUi, approvalUi, approvalDetails, questionUi, decimalSubmission };
+  const supervision = { executionVisible, connectivity, failureUi, retryUi, progressUi, stoppedUi, approvalUi, approvalDetails, approvalCountdown, pendingBadge, questionUi, decimalSubmission };
 
   await cdp.evaluate(`document.querySelector('#add-agent-button').click()`);
   await cdp.wait(`document.querySelector('#agent-dialog').open`);

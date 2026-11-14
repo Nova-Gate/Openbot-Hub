@@ -172,6 +172,11 @@ function renderRooms() {
     const identity = element("span");
     identity.append(element("strong", "", room.name), element("small", "", room.global ? "All machines. One thread." : `${room.agentIds.length} selected members`));
     row.append(identity);
+    const pending = state.approvals.filter((approval) => approval.status === "pending" && approval.roomId === room.id).length;
+    if (pending) {
+      row.append(element("span", "room-badge", String(pending)));
+      row.setAttribute("aria-label", `Open ${room.name} room, ${pending} pending decision${pending === 1 ? "" : "s"}`);
+    }
     row.addEventListener("click", () => {
       currentRoomId = room.id;
       try { localStorage.setItem("openbot-hub.room", room.id); } catch {}
@@ -191,7 +196,8 @@ function renderHeader() {
   document.querySelector("#room-membership").textContent = room.global ? "/ all agents" : `/ ${members(room).length} active members`;
   document.querySelector("#add-room-button").disabled = selectedAttachments.length > 0;
   document.querySelector("#edit-room-button").disabled = selectedAttachments.length > 0;
-  document.title = `OpenBot Hub — ${room.name}`;
+  const pending = state.approvals.filter((approval) => approval.status === "pending").length;
+  document.title = `${pending ? `(${pending}) ` : ""}OpenBot Hub — ${room.name}`;
 }
 
 function operationDetail(container, label, value) {
@@ -368,6 +374,11 @@ function executionCard(execution) {
       ? approval.kind === "question" ? "Waiting for Mo · answer, decline, or cancel" : "Waiting for Mo · no further action until you decide"
       : `${approval.status.toUpperCase()}${selected ? ` · ${selected.label}` : ""}`;
     decision.append(element("span", "approval-meta", detail));
+    if (approval.status === "pending") {
+      const countdown = element("span", "approval-countdown");
+      countdown.dataset.expiresAt = approval.expiresAt;
+      decision.append(countdown);
+    }
     renderOperation(decision, approval.operation);
     if (approval.form?.description) decision.append(element("span", "question-description", approval.form.description));
     const respond = async (payload) => {
@@ -581,6 +592,21 @@ function renderAll() {
   renderAttachments();
 }
 
+function updateCountdowns() {
+  for (const node of document.querySelectorAll("[data-expires-at]")) {
+    const remaining = new Date(node.dataset.expiresAt).getTime() - Date.now();
+    if (!Number.isFinite(remaining)) continue;
+    if (remaining <= 0) {
+      node.textContent = "DECISION DEADLINE PASSED";
+      continue;
+    }
+    const minutes = Math.floor(remaining / 60_000);
+    const seconds = String(Math.floor((remaining % 60_000) / 1_000)).padStart(2, "0");
+    node.textContent = `DECISION DEADLINE ${minutes}:${seconds}`;
+  }
+}
+setInterval(updateCountdowns, 1_000);
+
 async function refresh() {
   try {
     state = await api("/api/state");
@@ -589,6 +615,7 @@ async function refresh() {
       selectedAttachments = [];
     }
     renderAll();
+    updateCountdowns();
   } catch (error) {
     showToast(error.message);
   }

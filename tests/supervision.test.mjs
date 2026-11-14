@@ -26,6 +26,8 @@ async function startApp(directory) {
     "--port", "0",
     "--state", join(directory, "hub-state.json"),
     "--agents", join(directory, "agents.json"),
+    "--shutdown-grace-ms", "1000",
+    "--shutdown-deadline-ms", "8000",
   ], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
   let stderr = "";
   let stdout = "";

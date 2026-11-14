@@ -25,7 +25,7 @@ Limits: fake agents only; the demo Dell node runs on the Mini; phone evidence is
 
 ## M1 — Supervision and room completion
 
-**Status: complete. Exit gate passed on 2026-11-02 with CHECK, APP, ACP, SUP, and UI evidence.**
+**Status: exit gate passed on 2026-11-02 with CHECK, APP, ACP, SUP, and UI evidence; reopened for EXEC-03 on 2026-11-12 (Partial until the live supervision gate passes).**
 
 Requirements: ROOM-03, AGENT-03, EXEC-01, EXEC-02, EXEC-03, EXEC-04.
 
@@ -48,7 +48,7 @@ M1 does not require real harnesses, physical devices, approvals, attachments, or
 
 ## M2 — Real work and files
 
-**Status: active. Real OpenCode file/session, detailed native approval, native form-question, stop/failure supervision, descendant cleanup, same-session recovery, rich tool/plan progress, and deliberate attachment acceptance passed on 2026-11-03; generated-file return keeps the milestone open.**
+**Status: active. Real OpenCode file/session, detailed native approval, native form-question, stop/failure supervision, descendant cleanup, same-session recovery, rich tool/plan progress, and deliberate attachment acceptance passed on 2026-11-03; generated-file return keeps the milestone open.** The 2026-11-12 lifecycle change implements the EXEC-03 and EXEC-04 fixes and passes its offline gate (LIFE 13/13, 38/38 suite); both stay Partial until the live supervision gate passes on the installed CLI.
 
 Requirements: AGENT-02, AGENT-04, EXEC-05, EXEC-06, EXEC-07, FILE-01, FILE-02.
 
@@ -60,6 +60,7 @@ Requirements: AGENT-02, AGENT-04, EXEC-05, EXEC-06, EXEC-07, FILE-01, FILE-02.
 - **Done:** Verify real OpenCode active stop, induced provider-crash failure, descendant process cleanup, and subsequent execution in the same native session.
 - **Done:** Render durable tool calls, plans, results, and failures with node attribution; prove coalescing, restart persistence, replay suppression, real OpenCode result evidence, and desktop/phone rendering.
 - **Done:** Add deliberate attachment upload with type/size limits, room-scoped retry receipts, UUID storage, hashes, ACP byte delivery to local and remote agents, verified downloads, mobile composition, and deletion cleanup.
+- **Done (offline; live gate pending):** execution lifecycle — configurable idle and absolute prompt timeouts with `session/cancel`, bounded grace and process-group kill, dispatch-aware `unknown` versus `failed`, approval-paused timers with a visible deadline and room badge, and bounded SIGTERM shutdown.
 - Add generated-file return with limits, hashes, preview, and containment.
 - Keep provider credentials on the execution machine and out of logs, prompts, Git, and registry state.
 

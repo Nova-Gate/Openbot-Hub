@@ -1,13 +1,33 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const command = process.env.OPENCODE_CLI ?? resolve(homedir(), "Library/Application Support/ai.opencode.desktop/cli/2.0.26/opencode-cli");
+
+function newestOpenCodeCli() {
+  const base = resolve(homedir(), "Library/Application Support/ai.opencode.desktop/cli");
+  try {
+    const versions = readdirSync(base, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && existsSync(join(base, entry.name, "opencode-cli")))
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+    if (versions.length) return join(base, versions.at(-1), "opencode-cli");
+  } catch {}
+  return resolve(base, "2.0.26/opencode-cli");
+}
+
+const command = process.env.OPENCODE_CLI ?? newestOpenCodeCli();
+const commit = (() => {
+  try { return execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(); } catch { return null; }
+})();
+const cliVersion = (() => {
+  try { return execFileSync(command, ["--version"], { encoding: "utf8", timeout: 10_000 }).trim(); } catch { return null; }
+})();
 const artifacts = resolve(root, "artifacts/opencode-acceptance");
 await mkdir(resolve(root, ".runtime"), { recursive: true });
 await mkdir(artifacts, { recursive: true });
@@ -190,6 +210,11 @@ try {
     ok: true,
     requirements: ["AGENT-02", "AGENT-04", "EXEC-02", "EXEC-06", "EXEC-07", "FILE-01"],
     adapter: "local-opencode",
+    commit,
+    date: new Date().toISOString(),
+    node: process.version,
+    opencodeCli: command,
+    opencodeCliVersion: cliVersion,
     realModelCalls: 2,
     connectivity: health.status,
     nativeFileEvidence: true,

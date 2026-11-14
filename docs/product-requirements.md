@@ -1,8 +1,8 @@
 # OpenBot Hub product requirements
 
 - **Document status:** Authoritative product baseline
-- **Version:** 1.0
-- **Date:** 2026-11-04
+- **Version:** 1.1
+- **Date:** 2026-11-12
 - **Owner:** Mo
 
 This document defines what OpenBot Hub must become and what “full-feature ready” means. `docs/migration-plan.md` defines delivery order. `docs/requirements-matrix.md` tracks implementation and acceptance evidence.
@@ -10,6 +10,8 @@ This document defines what OpenBot Hub must become and what “full-feature read
 ## Change rule
 
 Every feature change must reference at least one requirement ID. A requirement is complete only when its acceptance evidence is recorded in the matrix. If scope, behavior, or priority changes, update this document, the roadmap, and the matrix in the same change. Do not treat a working demo as completion of a broader requirement.
+
+Every acceptance report must record the commit SHA, the run date, the Node version, and the harness or adapter version it exercised. Evidence without provenance is a claim, not a check.
 
 ## 1. Product definition
 
@@ -111,8 +113,8 @@ Full-feature V1 requires every P0 and P1 requirement to be Done, followed by the
 |---|---|---|
 | TEAM-01 | P1 | Create reusable teams and address their enabled members through a team mention. |
 | TEAM-02 | P1 | Permit controlled agent-to-agent delegation with origin tracking and explicit routing limits. |
-| TEAM-03 | P1 | Maintain shared task state and return a coherent synthesized result to the originating room. |
-| TEAM-04 | P1 | Enforce a global execution and anti-loop budget across agents and machines. |
+| TEAM-03 | P1 | Maintain shared task state with one accountable owner per task (minimal lead attribution) and return a coherent synthesized result to the originating room. |
+| TEAM-04 | P1 | Enforce a global execution and anti-loop budget across agents and machines. Until that budget exists, the six-turn request cap stands, and an `@everyone` that exceeds it must fail with an actionable message rather than silently narrowing the fan-out. |
 
 ### Files
 
@@ -157,6 +159,17 @@ Full-feature V1 requires every P0 and P1 requirement to be Done, followed by the
 | EXP-01 | P2 | Add conversation search, filtering, and notification preferences based on observed daily use. |
 | EXP-02 | P2 | Add reusable task templates and scheduled agent workflows after execution recovery is reliable. |
 
+### Explicitly excluded from V1
+
+These OpenBot-parity features are deliberately outside V1. They stay excluded unless Mo approves a scope change, and recording them prevents "full-feature V1" from being claimed through omission.
+
+| ID | Status | Requirement |
+|---|---|---|
+| EXCL-01 | Excluded | A dedicated selected-lead workflow beyond the per-task owner attribution in TEAM-03. |
+| EXCL-02 | Excluded | Task revisions and versioned task history. |
+| EXCL-03 | Excluded | Continue and Reassign controls. |
+| EXCL-04 | Excluded | Archive and Restore of rooms and tasks. |
+
 ## 6. Experience and design requirements
 
 - Chat remains the primary surface; management belongs in the room rail, execution directory, and focused dialogs.
@@ -178,6 +191,10 @@ Full-feature V1 requires every P0 and P1 requirement to be Done, followed by the
 - Changing execution configuration invalidates incompatible session references; presentation changes do not.
 - Remote work must fail explicitly rather than silently execute on the Mini.
 - Unknown or interrupted outcomes require reconciliation, not automatic resubmission.
+- `unknown` means the side effect may already have happened. It is reconciled before resending and is never treated as equivalent to `failed`.
+- Mention matching is token-based: the longest enabled name wins, it must end at a word boundary, and the match is consumed, so one post cannot address two prefix-overlapping agents.
+- An idempotency key is scoped to its room. Reusing a client message ID in a different room is a different message.
+- Selected-but-unsent attachment bytes are deletable or expire; an abandoned compose must not pin storage indefinitely.
 
 ## 8. Current baseline
 
@@ -189,12 +206,15 @@ This baseline is not full-feature V1. Other real harnesses, physical multi-machi
 
 ## 9. Active milestone: M2 real work and files
 
-M1 supervision and room completion passed its exit gate on 2026-11-02. M2 is active. AGENT-02, AGENT-04, EXEC-03, EXEC-05, EXEC-06, EXEC-07, and FILE-01 now have acceptance evidence, including real OpenCode embedded-resource delivery; the complete M2 exit gate remains open. The milestone includes:
+M1 supervision and room completion passed its exit gate on 2026-11-02. M2 is active. AGENT-02, AGENT-04, EXEC-05, EXEC-06, EXEC-07, and FILE-01 now have acceptance evidence, including real OpenCode embedded-resource delivery; the complete M2 exit gate remains open.
+
+A read-only review on 2026-11-12 found two lifecycle defects that keep EXEC-03 and EXEC-04 Partial: graceful shutdown drains in-flight work instead of interrupting it, and the fixed 120 s prompt timeout neither cancels the native turn nor distinguishes a failure before dispatch from one after it. The next change closes both before FILE-02 starts. The milestone includes:
 
 - AGENT-02 and AGENT-04: shared-runtime and real OpenCode acceptance are Done; add other required harnesses independently.
 - EXEC-05: room-bound questions/approvals are Done, including real OpenCode native question and detailed-permission evidence.
 - EXEC-06: durable tool calls, plans, results, failures, and execution-node attribution are Done in APP/UI and real OpenCode acceptance.
 - EXEC-07: real OpenCode execution-location and workspace evidence is Done; physical-node evidence remains under M4.
+- EXEC-02, EXEC-03, EXEC-04: lifecycle gate — configurable idle and absolute prompt timeouts with real cancellation, dispatched-versus-undispatched failure classification, and bounded shutdown that interrupts rather than drains. This gate precedes FILE-02.
 - FILE-01: deliberate attachments are Done with integrity, retry, room/message binding, local/remote delivery, restart-download, deletion-cleanup, desktop/mobile, and real OpenCode evidence.
 - FILE-02: generated-file return with integrity, preview, and containment checks remains.
 - Regression evidence for all previously completed requirements.

@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -11,6 +11,25 @@ const stateRoot = process.env.OPENBOT_HUB_STATE_ROOT;
 if (!workspace || !stateRoot) throw new Error("OPENBOT_HUB_WORKSPACE and OPENBOT_HUB_STATE_ROOT are required.");
 mkdirSync(workspace, { recursive: true });
 mkdirSync(stateRoot, { recursive: true });
+writeFileSync(join(stateRoot, "agent.pid"), `${process.pid}\n`);
+
+function acquirePromptLock() {
+  const lock = join(stateRoot, "prompt.lock");
+  try {
+    writeFileSync(lock, `${process.pid}\n`, { flag: "wx" });
+    return lock;
+  } catch {
+    try {
+      const owner = Number(readFileSync(lock, "utf8"));
+      process.kill(owner, 0);
+      writeFileSync(join(workspace, "overlap.txt"), `${process.pid} overlapped ${owner}\n`);
+      return null;
+    } catch {
+      writeFileSync(lock, `${process.pid}\n`);
+      return lock;
+    }
+  }
+}
 
 const models = {
   availableModels: [{ modelId: "offline-demo", name: "Offline demo (no API calls)" }],
@@ -158,6 +177,19 @@ const handlers = {
     const session = loadSession(request.params.sessionId);
     if (!session) return fail(request, -32002, "Resource not found");
     const text = textFromPrompt(request.params.prompt);
+    const promptLock = acquirePromptLock();
+    const releasePromptLock = () => { if (promptLock) rmSync(promptLock, { force: true }); };
+    if (/\bexit-mid-turn\b/.test(text)) process.exit(1);
+    if (/\bstubborn\b/.test(text)) {
+      process.on("SIGTERM", () => {});
+      process.stdout.write("this is not json\n");
+      return;
+    }
+    if (/\bgarble\b/.test(text)) {
+      process.stdout.write("this is not json\n");
+      return;
+    }
+    if (/\bhang\b/.test(text)) return;
     session.simulatedFailures ??= [];
     if (text.includes("fail-once") && !session.simulatedFailures.includes(text)) {
       session.simulatedFailures.push(text);
@@ -194,6 +226,7 @@ const handlers = {
       "This is a deterministic offline response; no model or paid API call was made.",
     ].join("\n");
     const finish = (accepted = true, detail = "") => {
+      releasePromptLock();
       const finalAnswer = accepted ? `${answer}${detail ? `\n${detail}` : ""}` : detail || "The proposed step was rejected; no further action was taken.";
       say(session.id, finalAnswer);
       record(session, "agent_message_chunk", finalAnswer);
@@ -277,6 +310,10 @@ process.stdin.on("data", (chunk) => {
       decisions.delete(request.id);
       if (request.error) decision?.reject(new Error(request.error.message));
       else decision?.resolve(request.result);
+      continue;
+    }
+    if (request.id === undefined && request.method === "session/cancel") {
+      writeFileSync(join(workspace, "cancel-received.json"), `${JSON.stringify(request.params)}\n`);
       continue;
     }
     if (request.id === undefined || typeof request.method !== "string") continue;

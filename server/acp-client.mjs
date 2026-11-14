@@ -1,13 +1,29 @@
 import { spawn } from "node:child_process";
 import { redactError } from "./redact.mjs";
 
+const failure = (message, extra = {}) => Object.assign(new Error(redactError(message)), extra);
+
 export class AcpClient {
-  constructor({ command, args, env = {}, cwd, requestTimeoutMs = 120_000, onRequest = null, onNotification = null }) {
+  constructor({
+    command,
+    args,
+    env = {},
+    cwd,
+    requestTimeoutMs = 120_000,
+    promptIdleTimeoutMs = 600_000,
+    promptAbsoluteTimeoutMs = 1_800_000,
+    cancelGraceMs = 2_000,
+    onRequest = null,
+    onNotification = null,
+  }) {
     this.command = command;
     this.args = args;
     this.env = env;
     this.cwd = cwd;
     this.requestTimeoutMs = requestTimeoutMs;
+    this.promptIdleTimeoutMs = promptIdleTimeoutMs;
+    this.promptAbsoluteTimeoutMs = promptAbsoluteTimeoutMs;
+    this.cancelGraceMs = cancelGraceMs;
     this.onRequest = onRequest;
     this.onNotification = onNotification;
     this.child = null;
@@ -19,14 +35,30 @@ export class AcpClient {
     this.buffer = "";
     this.stderr = "";
     this.startPromise = null;
+    this.stopPromise = null;
   }
 
-  #rejectPending(error) {
-    for (const { reject, timer } of this.pending.values()) {
-      clearTimeout(timer);
-      reject(error);
+  #clearTimers(entry) {
+    clearTimeout(entry.timer);
+    clearTimeout(entry.idleTimer);
+    clearTimeout(entry.absoluteTimer);
+  }
+
+  #rejectPending(reason) {
+    const base = reason instanceof Error ? reason.message : String(reason);
+    for (const [id, entry] of this.pending) {
+      this.#clearTimers(entry);
+      const extra = reason instanceof Error ? { ...reason } : {};
+      delete extra.message;
+      entry.reject(failure(base, {
+        ...extra,
+        dispatched: entry.dispatched ?? true,
+        outcomeUnknown: true,
+        fatal: true,
+        ...(entry.prompt ? { prompt: true, sessionId: entry.sessionId } : {}),
+      }));
+      this.pending.delete(id);
     }
-    this.pending.clear();
   }
 
   async start() {
@@ -44,10 +76,10 @@ export class AcpClient {
       });
       child.stdout.on("data", (chunk) => this.#consume(chunk));
       child.once("error", (cause) => {
-        this.#rejectPending(new Error(`ACP process failed: ${redactError(cause.message)}`));
+        this.#rejectPending(failure(`ACP process failed: ${redactError(cause.message)}`, { dispatched: false }));
       });
       child.stdin.once("error", (cause) => {
-        this.#rejectPending(new Error(`ACP input failed: ${redactError(cause.message)}`));
+        this.#rejectPending(failure(`ACP input failed: ${redactError(cause.message)}`, { dispatched: true }));
       });
       child.once("exit", (code) => {
         if (child.pid && process.platform !== "win32") {
@@ -57,7 +89,7 @@ export class AcpClient {
           }, 2_000);
           cleanup.unref();
         }
-        this.#rejectPending(new Error(`ACP process exited (${code}): ${this.stderr}`));
+        this.#rejectPending(failure(`ACP process exited (${code}): ${this.stderr}`, { dispatched: true }));
         if (this.child === child) this.child = null;
         this.startPromise = null;
       });
@@ -80,6 +112,7 @@ export class AcpClient {
   }
 
   async #handleRequest(message) {
+    this.#touchPrompts();
     try {
       if (!["session/request_permission", "elicitation/create"].includes(message.method) || !this.onRequest) {
         this.#respond(message.id, { error: { code: -32601, message: `Unsupported client method: ${message.method}` } });
@@ -102,7 +135,7 @@ export class AcpClient {
       try {
         message = JSON.parse(line);
       } catch {
-        this.#rejectPending(new Error("ACP stream contained malformed JSON."));
+        this.#rejectPending(failure("ACP stream contained malformed JSON.", { dispatched: true }));
         continue;
       }
       if (message.id !== undefined && message.method) {
@@ -111,16 +144,50 @@ export class AcpClient {
         const pending = this.pending.get(message.id);
         if (!pending) continue;
         this.pending.delete(message.id);
-        clearTimeout(pending.timer);
+        this.#clearTimers(pending);
         if (message.error) {
-          const error = new Error(redactError(`${message.error.code}: ${message.error.message}`));
-          error.retrySafe = message.error.code === -32010;
+          const error = failure(`${message.error.code}: ${message.error.message}`, {
+            dispatched: pending.dispatched ?? true,
+            outcomeUnknown: false,
+            retrySafe: message.error.code === -32010,
+            ...(pending.prompt ? { prompt: true, sessionId: pending.sessionId } : {}),
+          });
           pending.reject(error);
         } else pending.resolve(message.result);
       } else if (message.method === "session/update") {
+        this.#touchPrompts();
         this.#queueNotification(message.params);
       }
     }
+  }
+
+  #touchPrompts() {
+    for (const entry of this.pending.values()) {
+      if (!entry.prompt || entry.paused) continue;
+      clearTimeout(entry.idleTimer);
+      entry.idleTimer = setTimeout(() => this.#promptTimedOut(entry.id), this.promptIdleTimeoutMs);
+    }
+  }
+
+  #promptTimedOut(id, absolute = false) {
+    const entry = this.pending.get(id);
+    if (!entry?.prompt) return;
+    this.pending.delete(id);
+    this.#clearTimers(entry);
+    const cleanup = this.#abort(entry.sessionId);
+    cleanup.catch(() => {});
+    entry.reject(failure(
+      absolute
+        ? "The prompt exceeded its absolute time limit; it may still have run, so its outcome is unknown."
+        : "The agent stopped making progress and the prompt timed out; it may still have run, so its outcome is unknown.",
+      { dispatched: true, outcomeUnknown: true, prompt: true, timeout: true, fatal: true, sessionId: entry.sessionId, cleanup },
+    ));
+  }
+
+  async #abort(sessionId) {
+    this.cancel(sessionId);
+    await new Promise((resolveWait) => setTimeout(resolveWait, this.cancelGraceMs));
+    await this.stop().catch(() => {});
   }
 
   #queueNotification(params) {
@@ -141,17 +208,81 @@ export class AcpClient {
   }
 
   request(method, params = {}) {
-    if (!this.child) throw new Error("ACP client is not running.");
+    if (!this.child) throw failure("ACP client is not running.", { dispatched: false });
     const id = this.nextId++;
     const promise = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const entry = { resolve, reject, dispatched: false, prompt: false };
+      entry.timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(redactError(`${method} timed out: ${this.stderr}`)));
+        reject(failure(`${method} timed out: ${this.stderr}`, { dispatched: entry.dispatched, fatal: true }));
       }, this.requestTimeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, entry);
+      try {
+        this.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+        entry.dispatched = true;
+      } catch (error) {
+        this.pending.delete(id);
+        this.#clearTimers(entry);
+        reject(failure(`${method} could not be sent: ${error.message}`, { dispatched: false, fatal: true }));
+      }
     });
-    this.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
     return promise;
+  }
+
+  async prompt(sessionId, text, attachments = []) {
+    if (!this.child) throw failure("ACP client is not running.", { dispatched: false, prompt: true });
+    const baseline = this.notifications.length;
+    const id = this.nextId++;
+    const promise = new Promise((resolve, reject) => {
+      const entry = { resolve, reject, prompt: true, sessionId, dispatched: false, paused: false, id };
+      entry.idleTimer = setTimeout(() => this.#promptTimedOut(id), this.promptIdleTimeoutMs);
+      entry.absoluteTimer = setTimeout(() => this.#promptTimedOut(id, true), this.promptAbsoluteTimeoutMs);
+      this.pending.set(id, entry);
+      try {
+        this.child.stdin.write(`${JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          method: "session/prompt",
+          params: { sessionId, prompt: [{ type: "text", text }, ...attachments] },
+        })}\n`);
+        entry.dispatched = true;
+      } catch (error) {
+        this.pending.delete(id);
+        this.#clearTimers(entry);
+        reject(failure(`The prompt could not be sent: ${error.message}`, { dispatched: false, outcomeUnknown: false, prompt: true, fatal: true }));
+      }
+    });
+    const result = await promise;
+    await this.settleNotifications();
+    const answer = this.notifications.slice(baseline)
+      .filter((entry) => entry.sessionId === sessionId && entry.update?.sessionUpdate === "agent_message_chunk")
+      .map((entry) => entry.update.content?.text ?? "")
+      .join("");
+    return { answer, stopReason: result.stopReason };
+  }
+
+  pausePromptTimers() {
+    for (const entry of this.pending.values()) {
+      if (!entry.prompt) continue;
+      entry.paused = true;
+      clearTimeout(entry.idleTimer);
+    }
+  }
+
+  resumePromptTimers() {
+    for (const entry of this.pending.values()) {
+      if (!entry.prompt || !entry.paused) continue;
+      entry.paused = false;
+      clearTimeout(entry.idleTimer);
+      entry.idleTimer = setTimeout(() => this.#promptTimedOut(entry.id), this.promptIdleTimeoutMs);
+    }
+  }
+
+  cancel(sessionId) {
+    if (!sessionId || !this.child?.stdin.writable) return;
+    try {
+      this.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "session/cancel", params: { sessionId } })}\n`);
+    } catch {}
   }
 
   async ensureSession(sessionId, cwd) {
@@ -170,20 +301,6 @@ export class AcpClient {
     return created.sessionId;
   }
 
-  async prompt(sessionId, text, attachments = []) {
-    const baseline = this.notifications.length;
-    const result = await this.request("session/prompt", {
-      sessionId,
-      prompt: [{ type: "text", text }, ...attachments],
-    });
-    await this.settleNotifications();
-    const answer = this.notifications.slice(baseline)
-      .filter((entry) => entry.sessionId === sessionId && entry.update?.sessionUpdate === "agent_message_chunk")
-      .map((entry) => entry.update.content?.text ?? "")
-      .join("");
-    return { answer, stopReason: result.stopReason };
-  }
-
   #signal(child, signal) {
     try {
       if (process.platform !== "win32" && child.pid) process.kill(-child.pid, signal);
@@ -193,11 +310,17 @@ export class AcpClient {
     }
   }
 
-  async stop() {
+  stop() {
+    if (this.stopPromise) return this.stopPromise;
+    this.stopPromise = this.#stopInternal().finally(() => { this.stopPromise = null; });
+    return this.stopPromise;
+  }
+
+  async #stopInternal() {
     const child = this.child;
     this.child = null;
     this.startPromise = null;
-    this.#rejectPending(new Error("ACP client stopped."));
+    this.#rejectPending(failure("ACP client stopped.", { dispatched: true }));
     if (!child || !child.pid || child.exitCode !== null || child.signalCode !== null) return;
     const exited = new Promise((resolve) => child.once("exit", resolve));
     const grace = (milliseconds) => new Promise((resolve) => {
