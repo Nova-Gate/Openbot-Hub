@@ -62,7 +62,7 @@ function validateContent(mediaType, content) {
 }
 
 export function acpAttachmentBlock(attachment, content) {
-  const uri = `openbot-hub://attachments/${attachment.id}/${encodeURIComponent(attachment.name)}`;
+  const uri = `qenbet://attachments/${attachment.id}/${encodeURIComponent(attachment.name)}`;
   const _meta = { attachmentId: attachment.id, fileName: attachment.name, sha256: attachment.sha256 };
   if (["text/plain", "text/markdown", "text/csv", "application/json"].includes(attachment.mediaType)) {
     return { type: "resource", resource: { uri, mimeType: attachment.mediaType, text: content.toString("utf8") }, _meta };

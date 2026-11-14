@@ -33,7 +33,7 @@ async function startApp(directory) {
   child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
   const ready = await withTimeout((async () => {
     for (;;) {
-      const line = stdout.split("\n").find((value) => value.includes("openbot-hub.ready"));
+      const line = stdout.split("\n").find((value) => value.includes("qenbet.ready"));
       if (line) return JSON.parse(line);
       if (child.exitCode !== null) throw new Error(`App exited: ${stderr}`);
       await new Promise((resolveWait) => setTimeout(resolveWait, 20));
@@ -93,7 +93,7 @@ test("ACP progress normalization preserves tool results and plan state while ign
 });
 
 test("APP progress events coalesce, retain authoritative nodes, survive restart, and load legacy executions", { timeout: 30_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-progress-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-progress-"));
   const agents = [
     { id: "mini-fake", name: "Mini Fake", nodeId: "mac-mini", transport: "local-fake", workspace: join(directory, "mini-workspace"), state: join(directory, "mini-state"), centralWorkspace: join(directory, "mini-central") },
     { id: "dell-fake", name: "Dell Fake", nodeId: "demo-dell", transport: "local-fake", workspace: join(directory, "dell-workspace"), state: join(directory, "dell-state"), centralWorkspace: join(directory, "dell-central") },

@@ -63,7 +63,7 @@ async function startApp(directory) {
   ], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
   let stderr = "";
   child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
-  const ready = await waitForEvent(child, "openbot-hub.ready", () => stderr);
+  const ready = await waitForEvent(child, "qenbet.ready", () => stderr);
   return { child, base: new URL(ready.url) };
 }
 
@@ -107,7 +107,7 @@ const jsonOptions = (method, value) => ({
 });
 
 test("persistent registry, dynamic rooms, routing, deduplication, and restart recovery", { timeout: 30_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-app-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-app-test-"));
   const token = randomBytes(32).toString("hex");
   await writeFile(join(directory, "token"), `${token}\n`, { mode: 0o600 });
   await writeFile(join(directory, "node.json"), JSON.stringify({
@@ -125,7 +125,7 @@ test("persistent registry, dynamic rooms, routing, deduplication, and restart re
   });
   let nodeStderr = "";
   node.stderr.on("data", (chunk) => { nodeStderr += chunk.toString("utf8"); });
-  const listening = await waitForEvent(node, "openbot-hub.listening", () => nodeStderr);
+  const listening = await waitForEvent(node, "qenbet.listening", () => nodeStderr);
   await writeFile(join(directory, "agent.json"), JSON.stringify({
     agentId: "dell-fake",
     host: "127.0.0.1",
@@ -163,7 +163,7 @@ test("persistent registry, dynamic rooms, routing, deduplication, and restart re
 
   app = await startApp(directory);
   const health = await request(app, "/api/health");
-  assert.deepEqual(health, { ok: true, product: "OpenBot Hub", accounts: false, externalAnalytics: false });
+  assert.deepEqual(health, { ok: true, product: "Qenbet", accounts: false, externalAnalytics: false });
   const initial = await request(app, "/api/state");
   assert.equal(initial.rooms.length, 1);
   assert.equal(initial.rooms[0].id, "army");
@@ -173,7 +173,7 @@ test("persistent registry, dynamic rooms, routing, deduplication, and restart re
   assert.deepEqual(initial.executions, []);
   const page = await fetch(new URL("/", app.base));
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /OpenBot Hub — Army/);
+  assert.match(await page.text(), /Qenbet — Army/);
 
   const mini = await post(app, "@Mini Fake hello", "mini-request-1");
   assert.equal(mini.executions.length, 1);
@@ -363,7 +363,7 @@ test("persistent registry, dynamic rooms, routing, deduplication, and restart re
 });
 
 test("loopback API rejects foreign origins, hosts, and non-JSON mutations without executing", { timeout: 30_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-origin-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-origin-test-"));
   await writeFile(join(directory, "agents.json"), JSON.stringify([{
     id: "mini-fake",
     name: "Mini Fake",
@@ -419,7 +419,7 @@ test("loopback API rejects foreign origins, hosts, and non-JSON mutations withou
 });
 
 test("malformed state aborts startup without replacing the original file", { timeout: 30_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-corrupt-state-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-corrupt-state-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(join(directory, "agents.json"), "[]\n");
   const damaged = "{ definitely-not-valid-json\n";

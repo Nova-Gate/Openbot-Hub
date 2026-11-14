@@ -1,10 +1,10 @@
-# OpenBot Hub architecture
+# Qenbet architecture
 
 ## Decision
 
-OpenBot Hub is a custom, account-free application hosted on the Mac mini. It provides one responsive web interface and one global Army room; execution is distributed to agents on their assigned machines.
+Qenbet is a custom, account-free application hosted on the Mac mini. It provides one responsive web interface and one global Army room; execution is distributed to agents on their assigned machines.
 
-Upstream OpenBot is an architectural reference, not a runtime dependency. The application does not require OpenBot installation, email verification, vendor accounts, hosted services, billing, reporting, analytics, or telemetry. Useful protocol ideas and modules may be adopted selectively, with upstream notices preserved whenever code is copied or modified.
+The application does not require an external agent platform, email verification, vendor accounts, hosted services, billing, reporting, analytics, or telemetry.
 
 This deliberately avoids:
 
@@ -20,7 +20,7 @@ Army Hub remains a separate, untouched repository and runtime.
                     Desktop or phone browser
                               │
                               ▼
-              Mac mini: OpenBot Hub web application
+              Mac mini: Qenbet web application
               ┌───────────────────────────────────┐
               │ One global Army room              │
               │ Agent directory and durable state │
@@ -43,7 +43,7 @@ The current demo implements both paths on the Mac mini. Its `demo-dell` node pro
 
 ## Ownership
 
-### Central OpenBot Hub application
+### Central Qenbet application
 
 Owns:
 

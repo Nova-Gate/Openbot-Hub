@@ -35,7 +35,7 @@ const ready = new Promise((resolveReady, reject) => {
       buffer = buffer.slice(index + 1);
       try {
         const event = JSON.parse(line);
-        if (event.type === "openbot-hub.listening") resolveReady(event);
+        if (event.type === "qenbet.listening") resolveReady(event);
       } catch {}
     }
   });

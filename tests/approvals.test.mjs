@@ -42,7 +42,7 @@ async function startApp(directory, approvalTimeoutMs = 60_000) {
   child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
   const ready = await withTimeout((async () => {
     for (;;) {
-      const line = stdout.split("\n").find((value) => value.includes("openbot-hub.ready"));
+      const line = stdout.split("\n").find((value) => value.includes("qenbet.ready"));
       if (line) return JSON.parse(line);
       if (child.exitCode !== null) throw new Error(`App exited: ${stderr}`);
       await new Promise((resolveWait) => setTimeout(resolveWait, 20));
@@ -96,7 +96,7 @@ async function waitForApproval(app, executionId) {
 }
 
 async function setup(t, approvalTimeoutMs = 60_000) {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-approvals-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-approvals-"));
   await writeFile(join(directory, "agents.json"), JSON.stringify([{
     id: "mini-fake",
     name: "Mini Fake",
@@ -226,7 +226,7 @@ test("waiting stop, wrong-session rejection, expiry, and restart never leave pen
 });
 
 test("a decision recorded during initial persistence returns the same selection to ACP", { timeout: 10_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-approval-race-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-approval-race-"));
   const hub = new Hub({
     root: directory,
     statePath: join(directory, "hub-state.json"),
@@ -290,7 +290,7 @@ test("a decision recorded during initial persistence returns the same selection 
 });
 
 test("ACP stop kills the process group and rejects the in-flight prompt", { timeout: 15_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-process-group-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-process-group-"));
   const pidPath = join(directory, "descendant.pid");
   const harness = join(directory, "harness.mjs");
   await writeFile(harness, `import { spawn } from "node:child_process";

@@ -38,7 +38,7 @@ async function startNode(directory, token) {
         const line = buffer.slice(0, index);
         buffer = buffer.slice(index + 1);
         const event = JSON.parse(line);
-        if (event.type === "openbot-hub.listening") resolveReady(event);
+        if (event.type === "qenbet.listening") resolveReady(event);
       }
     });
     child.once("exit", (code) => reject(new Error(`Node exited with ${code}: ${stderr}`)));
@@ -124,7 +124,7 @@ async function stopProcess(child) {
 }
 
 test("remote ACP round trip, execution proof, and resume after proxy restart", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-test-"));
   const token = randomBytes(32).toString("hex");
   await writeFile(join(directory, "token"), `${token}\n`, { mode: 0o600 });
   const node = await startNode(directory, token);
@@ -193,7 +193,7 @@ test("remote ACP round trip, execution proof, and resume after proxy restart", a
 });
 
 test("node rejects an invalid connector credential before starting a harness", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-auth-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-auth-test-"));
   await writeFile(join(directory, "token"), `${randomBytes(32).toString("hex")}\n`, { mode: 0o600 });
   await writeFile(join(directory, "wrong-token"), `${randomBytes(32).toString("hex")}\n`, { mode: 0o600 });
   const node = await startNode(directory);

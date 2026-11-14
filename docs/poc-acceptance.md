@@ -10,9 +10,9 @@ Physical multi-machine execution, secure phone-network access, generated-file re
 
 For every run, record:
 
-- Test ID, date, Git commit, OpenBot Hub version, connector version, and harness version.
+- Test ID, date, Git commit, Qenbet version, connector version, and harness version.
 - Control-plane node and execution node.
-- OpenBot Hub agent ID, connector session ID, harness session ID, origin ID, and delivery ID.
+- Qenbet agent ID, connector session ID, harness session ID, origin ID, and delivery ID.
 - Actions performed and observed result.
 - Relevant redacted logs and protocol events.
 - Pass/fail and any manual steps required.
@@ -27,7 +27,7 @@ Store local run artifacts outside Git by default. Commit only redacted summaries
 
 **Setup:** One fake Dell harness exposed through the connector and registered as one custom ACP agent on Mini.
 
-**Steps:** Start OpenBot Hub and the connector; list and select the agent.
+**Steps:** Start Qenbet and the connector; list and select the agent.
 
 **Pass:** The agent appears once, maps to Dell, and no Mini-local executable with the same agent identity is started.
 
@@ -35,11 +35,11 @@ Store local run artifacts outside Git by default. Commit only redacted summaries
 
 **Steps:** Start a new conversation and send a scripted prompt with a known origin ID.
 
-**Pass:** Exactly one Dell harness session is created; the expected streamed/final answer returns to the same OpenBot Hub conversation with matching origin and delivery IDs.
+**Pass:** Exactly one Dell harness session is created; the expected streamed/final answer returns to the same Qenbet conversation with matching origin and delivery IDs.
 
 ### ACP-03: Session persistence and resume
 
-**Steps:** Complete a turn, disconnect/reconnect the connector, then resume the same conversation. Repeat after OpenBot Hub restart.
+**Steps:** Complete a turn, disconnect/reconnect the connector, then resume the same conversation. Repeat after Qenbet restart.
 
 **Pass:** The same logical harness session is resumed, prior context remains available, and no duplicate session or turn is created.
 
@@ -69,7 +69,7 @@ Store local run artifacts outside Git by default. Commit only redacted summaries
 
 ### ACP-08: Questions and approvals
 
-**Steps:** Trigger a scripted question and an approval; answer from OpenBot Hub.
+**Steps:** Trigger a scripted question and an approval; answer from Qenbet.
 
 **Pass:** The correct pending request appears once, the response reaches the originating Dell session, and the turn resumes with that answer. Expired or wrong-session handles are rejected.
 
@@ -81,7 +81,7 @@ Store local run artifacts outside Git by default. Commit only redacted summaries
 
 ### ACP-10: Restart during active work
 
-**Steps:** Restart the connector during a turn; repeat with OpenBot Hub restart and node network interruption.
+**Steps:** Restart the connector during a turn; repeat with Qenbet restart and node network interruption.
 
 **Pass:** Each turn is reconciled as completed, failed, interrupted, or unknown. Unknown outcomes are not blindly retried and require attention.
 
@@ -135,7 +135,7 @@ Store local run artifacts outside Git by default. Commit only redacted summaries
 
 **Pass:** Files and side effects remain correctly isolated by agent and node; no accidental shared state occurs.
 
-## MOBILE — OpenBot Hub-only phone experience
+## MOBILE — Qenbet-only phone experience
 
 ### MOBILE-01: Pair and open the global channel
 
@@ -161,7 +161,7 @@ Store local run artifacts outside Git by default. Commit only redacted summaries
 
 ### MOBILE-06: Single-app check
 
-**Pass:** All required daily global-chat and coordination actions are possible in OpenBot Hub without Element, a browser fallback to another chat client, or host switching.
+**Pass:** All required daily global-chat and coordination actions are possible in Qenbet without Element, a browser fallback to another chat client, or host switching.
 
 ## REAL — Disposable real-agent onboarding
 
@@ -195,7 +195,7 @@ Run these separately for every real harness/agent.
 
 ### SEC-01: Default permission posture
 
-**Pass:** Actual OpenBot Hub and harness permissions are documented from observed behavior, including whether actions require approval. No assumption is made from marketing or inconsistent documentation.
+**Pass:** Actual Qenbet and harness permissions are documented from observed behavior, including whether actions require approval. No assumption is made from marketing or inconsistent documentation.
 
 ### SEC-02: Node authorization
 
@@ -233,7 +233,7 @@ Run these separately for every real harness/agent.
 
 ## Final go/no-go scenario
 
-From the phone, in OpenBot Hub alone:
+From the phone, in Qenbet alone:
 
 1. Open the single global Army channel.
 2. Ask a Mini agent and Dell agent to coordinate on one task.

@@ -35,7 +35,7 @@ async function startApp(directory) {
   child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
   const ready = await withTimeout((async () => {
     for (;;) {
-      const line = stdout.split("\n").find((value) => value.includes("openbot-hub.ready"));
+      const line = stdout.split("\n").find((value) => value.includes("qenbet.ready"));
       if (line) return JSON.parse(line);
       if (child.exitCode !== null) throw new Error(`App exited: ${stderr}`);
       await new Promise((resolveWait) => setTimeout(resolveWait, 20));
@@ -91,7 +91,7 @@ async function waitForExecution(app, executionId, status) {
 }
 
 async function setup(t) {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-supervision-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-supervision-"));
   await writeFile(join(directory, "agents.json"), JSON.stringify([{
     id: "mini-fake",
     name: "Mini Fake",

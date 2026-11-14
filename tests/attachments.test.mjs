@@ -65,7 +65,7 @@ async function startApp(directory) {
   ], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
   let stderr = "";
   child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
-  const ready = await waitForEvent(child, "openbot-hub.ready", () => stderr);
+  const ready = await waitForEvent(child, "qenbet.ready", () => stderr);
   return { child, base: new URL(ready.url) };
 }
 
@@ -119,7 +119,7 @@ async function waitForExecution(app, executionId) {
 }
 
 async function setup(t, remote = false) {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-attachments-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-attachments-test-"));
   const context = { directory, app: null, node: null };
   let node;
   if (remote) {
@@ -138,7 +138,7 @@ async function setup(t, remote = false) {
     context.node = node;
     let nodeStderr = "";
     node.stderr.on("data", (chunk) => { nodeStderr += chunk.toString("utf8"); });
-    const listening = await waitForEvent(node, "openbot-hub.listening", () => nodeStderr);
+    const listening = await waitForEvent(node, "qenbet.listening", () => nodeStderr);
     await writeFile(join(directory, "agent.json"), JSON.stringify({ agentId: "dell-fake", host: "127.0.0.1", port: listening.port, tokenFile: join(directory, "token") }));
   }
   const agents = [{
@@ -285,7 +285,7 @@ test("Mini and remote Dell receive identical bytes, downloads survive restart, a
 });
 
 test("room deletion waits for delayed uploads and releases guards after aborted transfers", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-upload-race-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-upload-race-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const statePath = join(directory, "state.json");
   const hub = new Hub({ root: directory, statePath, agents: [] });
@@ -346,7 +346,7 @@ test("room deletion waits for delayed uploads and releases guards after aborted 
 });
 
 test("legacy state loads with empty attachment metadata and limits", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-legacy-attachments-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-legacy-attachments-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const statePath = join(directory, "state.json");
   await writeFile(statePath, JSON.stringify({

@@ -23,7 +23,6 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .app-shell { display: grid; grid-template-columns: 236px minmax(0, 1fr) 290px; height: 100dvh; }
 .rail { border-right: 1px solid var(--navy); padding: 24px 20px 18px; display: flex; flex-direction: column; min-height: 0; }
 .wordmark { display: flex; align-items: baseline; gap: 7px; font-family: var(--mono); font-size: 15px; font-weight: 800; letter-spacing: -.04em; margin-bottom: 34px; }
-.wordmark-hub { background: var(--yellow); padding: 2px 5px; }
 .rail-section-label, .eyebrow, .composer-meta, .rail-foot, .protocol-note { font-family: var(--mono); font-size: 10px; line-height: 1.5; letter-spacing: .08em; font-weight: 650; }
 .rail-section-label, .eyebrow { color: var(--muted); }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }

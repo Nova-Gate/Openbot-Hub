@@ -25,7 +25,7 @@ const fakeAgent = (directory) => [{
 }];
 
 async function makeHub(agentFactory = fakeAgent, options = {}) {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-lifecycle-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-lifecycle-"));
   const hub = new Hub({
     root,
     statePath: join(directory, "hub-state.json"),
@@ -183,7 +183,7 @@ test("shutdown interrupts queued work and marks running work unknown", { timeout
 });
 
 test("SIGTERM returns within the deadline with terminal states and no orphans", { timeout: 30_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-sigterm-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-sigterm-"));
   const agentsPath = join(directory, "agents.json");
   await writeFile(agentsPath, `${JSON.stringify(fakeAgent(directory), null, 2)}\n`);
   const statePath = join(directory, "hub-state.json");
@@ -207,7 +207,7 @@ test("SIGTERM returns within the deadline with terminal states and no orphans", 
   });
   const startup = Date.now();
   while (!base) {
-    const line = output.split("\n").find((value) => value.includes("openbot-hub.ready"));
+    const line = output.split("\n").find((value) => value.includes("qenbet.ready"));
     if (line) {
       base = new URL(JSON.parse(line).url);
       break;
@@ -274,7 +274,7 @@ test("the absolute prompt limit fires even without idle progress", { timeout: 30
 });
 
 test("a session-request timeout retires the wedged client", { timeout: 20_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-hub-session-timeout-"));
+  const directory = await mkdtemp(join(tmpdir(), "qenbet-session-timeout-"));
   const silent = join(directory, "silent-harness.sh");
   const pidPath = join(directory, "silent.pid");
   await writeFile(silent, `#!/bin/sh\nprintf '%s\\n' "$$" > "${pidPath}"\nexec sleep 30\n`, { mode: 0o755 });
