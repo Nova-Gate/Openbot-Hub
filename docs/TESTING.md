@@ -1,4 +1,4 @@
-# Testing OpenBot Hub
+# Testing Qenbet
 
 ## What is implemented
 
@@ -23,12 +23,12 @@ The repository contains a runnable, account-free application with:
 - Deliberate TXT, MD, CSV, JSON, PDF, PNG, and JPEG attachments with four-file/8 MiB limits, room binding, UUID storage, SHA-256 verification, ACP byte delivery, message downloads, and deletion cleanup.
 - Offline connector/application integration tests and separate live OpenCode file/session and supervision acceptance scripts.
 
-The offline demo and test suite require no upstream OpenBot installation, email address, vendor account, API key, model provider, or paid API call. The optional real OpenCode tests use the CLI's existing provider authentication and make small model calls; they do not use an OpenBot account or copy provider credentials into the Hub.
+The offline demo and test suite require no upstream platform installation, email address, vendor account, API key, model provider, or paid API call. The optional real OpenCode tests use the CLI's existing provider authentication and make small model calls; they do not use a vendor account or copy provider credentials into the Hub.
 
 ## Run automated checks
 
 ```sh
-cd /Users/immortalist/Documents/Kimi/Workspaces/MacServer/openbot-hub
+cd "$(git rev-parse --show-toplevel)"
 npm run check
 npm test
 npm run test:ui  # requires macOS and Google Chrome
@@ -116,13 +116,13 @@ The JSON report is written to `artifacts/opencode-supervision/report.json`.
 ## Run the app
 
 ```sh
-cd /Users/immortalist/Documents/Kimi/Workspaces/MacServer/openbot-hub
+cd "$(git rev-parse --show-toplevel)"
 npm run dev -- --host 127.0.0.1 --port 7100
 ```
 
 Open `http://127.0.0.1:7100/`. Stop the app with Ctrl+C when finished.
 
-The launcher creates demo-only state under `runtime/`, generates a local connector credential if needed, starts the fake execution node, and then starts the web application. It never launches upstream OpenBot or touches Army Hub. Real OpenCode agents are registered separately through the execution directory and launch only when tested or addressed.
+The launcher creates demo-only state under `runtime/`, generates a local connector credential if needed, starts the fake execution node, and then starts the web application. It never launches an upstream platform or touches Army Hub. Real OpenCode agents are registered separately through the execution directory and launch only when tested or addressed.
 
 ## Manual acceptance flow
 

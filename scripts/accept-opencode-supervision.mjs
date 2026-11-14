@@ -39,9 +39,9 @@ await mkdir(workspace, { recursive: true });
 const agentsPath = join(control, "agents.json");
 const statePath = join(control, "hub-state.json");
 const providerPidPath = join(control, "provider.pid");
-const marker = `OBH_SUP_${randomBytes(6).toString("hex")}`;
+const marker = `QENBET_SUP_${randomBytes(6).toString("hex")}`;
 const wrapper = join(control, "opencode-wrapper.sh");
-await writeFile(wrapper, `#!/bin/sh\nprintf '%s\\n' "$$" > "$OPENBOT_HUB_ACCEPTANCE_PID"\nexec ${JSON.stringify(command)} "$@"\n`, { mode: 0o700 });
+await writeFile(wrapper, `#!/bin/sh\nprintf '%s\\n' "$$" > "$QENBET_ACCEPTANCE_PID"\nexec ${JSON.stringify(command)} "$@"\n`, { mode: 0o700 });
 await writeFile(join(workspace, "opencode.json"), `${JSON.stringify({ permission: { bash: "ask" } }, null, 2)}\n`);
 const definition = {
   id: "opencode-real",
@@ -73,7 +73,7 @@ async function startApp() {
     "--agents", agentsPath,
   ], {
     cwd: root,
-    env: { ...process.env, OPENBOT_HUB_ACCEPTANCE_PID: providerPidPath },
+    env: { ...process.env, QENBET_ACCEPTANCE_PID: providerPidPath },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";
@@ -82,7 +82,7 @@ async function startApp() {
   child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
   const ready = await withTimeout((async () => {
     for (;;) {
-      const line = stdout.split("\n").find((value) => value.includes("openbot-hub.ready"));
+      const line = stdout.split("\n").find((value) => value.includes("qenbet.ready"));
       if (line) return JSON.parse(line);
       if (child.exitCode !== null) throw new Error(`Acceptance app exited: ${stderr}`);
       await new Promise((resolveWait) => setTimeout(resolveWait, 25));

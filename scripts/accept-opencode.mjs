@@ -39,7 +39,7 @@ await mkdir(workspace, { recursive: true });
 const agentsPath = join(control, "agents.json");
 const statePath = join(control, "hub-state.json");
 const guardPath = join(control, "outside-guard.txt");
-const marker = `OBH_${randomBytes(6).toString("hex")}`;
+const marker = `QENBET_${randomBytes(6).toString("hex")}`;
 const definition = {
   id: "opencode-real",
   name: "OpenCode Real",
@@ -76,7 +76,7 @@ async function startApp() {
   child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
   const ready = await withTimeout((async () => {
     for (;;) {
-      const line = stdout.split("\n").find((value) => value.includes("openbot-hub.ready"));
+      const line = stdout.split("\n").find((value) => value.includes("qenbet.ready"));
       if (line) return JSON.parse(line);
       if (child.exitCode !== null) throw new Error(`Acceptance app exited: ${stderr}`);
       await new Promise((resolveWait) => setTimeout(resolveWait, 25));
@@ -157,7 +157,7 @@ try {
 
   const uploaded = await uploadSource();
   const attachmentId = uploaded.attachment.id;
-  const firstPrompt = "@OpenCode Real Read the attached source.txt ACP embedded resource. Its text content is inlined directly after the openbot-hub URI in this same user message; that inlined text is the attachment content, not an MCP resource reference. Do not call MCP resource tools. Create evidence.txt in the current workspace containing exactly the token from that inlined attachment text followed by a newline. The token is deliberately absent from these instructions, so obtain it from the attached resource content. Do not create or modify any other file. Then reply with exactly OPENBOT_REAL_DONE and nothing else.";
+  const firstPrompt = "@OpenCode Real Read the attached source.txt ACP embedded resource. Its text content is inlined directly after the qenbet URI in this same user message; that inlined text is the attachment content, not an MCP resource reference. Do not call MCP resource tools. Create evidence.txt in the current workspace containing exactly the token from that inlined attachment text followed by a newline. The token is deliberately absent from these instructions, so obtain it from the attached resource content. Do not create or modify any other file. Then reply with exactly QENBET_REAL_DONE and nothing else.";
   assert.equal(firstPrompt.includes(marker), false);
   const first = await runPrompt(firstPrompt, "opencode-real-file-task", [attachmentId]);
   const firstOrigin = first.state.messages.find((message) => message.id === first.execution.originId);
@@ -171,7 +171,7 @@ try {
   assert.equal(first.reply.authorId, definition.id);
   assert.equal(first.reply.authorType, "agent");
   assert.equal(first.reply.nodeId, definition.nodeId);
-  assert.equal(first.reply.text.trim(), "OPENBOT_REAL_DONE");
+  assert.equal(first.reply.text.trim(), "QENBET_REAL_DONE");
   const realTools = first.execution.events.filter((event) => event.kind === "tool");
   assert.ok(realTools.length > 0, "Real OpenCode file work must emit tool progress");
   const completedTool = realTools.find((event) => event.status === "completed" && (event.operation.rawOutput !== undefined || event.operation.content !== undefined) && /evidence\.txt/.test(JSON.stringify(event.operation)));

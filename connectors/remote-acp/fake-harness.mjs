@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { attachmentsFromPrompt, textFromPrompt } from "./lib.mjs";
 
-const nodeId = process.env.OPENBOT_HUB_NODE_ID ?? "unknown-node";
-const title = process.env.OPENBOT_HUB_AGENT_TITLE ?? "Fake Agent";
-const workspace = process.env.OPENBOT_HUB_WORKSPACE;
-const stateRoot = process.env.OPENBOT_HUB_STATE_ROOT;
-if (!workspace || !stateRoot) throw new Error("OPENBOT_HUB_WORKSPACE and OPENBOT_HUB_STATE_ROOT are required.");
+const nodeId = process.env.QENBET_NODE_ID ?? "unknown-node";
+const title = process.env.QENBET_AGENT_TITLE ?? "Fake Agent";
+const workspace = process.env.QENBET_WORKSPACE;
+const stateRoot = process.env.QENBET_STATE_ROOT;
+if (!workspace || !stateRoot) throw new Error("QENBET_WORKSPACE and QENBET_STATE_ROOT are required.");
 mkdirSync(workspace, { recursive: true });
 mkdirSync(stateRoot, { recursive: true });
 writeFileSync(join(stateRoot, "agent.pid"), `${process.pid}\n`);
@@ -147,7 +147,7 @@ const handlers = {
     writeFileSync(join(stateRoot, "client-capabilities.json"), `${JSON.stringify(clientCapabilities, null, 2)}\n`, { mode: 0o600 });
     reply(request, {
       protocolVersion: 1,
-      agentInfo: { name: "openbot-hub-fake", title, version: "0.1.0" },
+      agentInfo: { name: "qenbet-fake", title, version: "0.1.0" },
       agentCapabilities: { loadSession: true },
       authMethods: [],
     });

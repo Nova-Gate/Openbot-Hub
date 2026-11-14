@@ -12,7 +12,7 @@ const connectionState = document.querySelector("#connection-state");
 const toast = document.querySelector("#toast");
 let state = { rooms: [], agents: [], messages: [], executions: [], approvals: [] };
 let currentRoomId = "army";
-try { currentRoomId = localStorage.getItem("openbot-hub.room") || "army"; } catch {}
+try { currentRoomId = localStorage.getItem("qenbet.room") || "army"; } catch {}
 let toastTimer;
 let firstRender = true;
 let selectedAttachments = [];
@@ -179,7 +179,7 @@ function renderRooms() {
     }
     row.addEventListener("click", () => {
       currentRoomId = room.id;
-      try { localStorage.setItem("openbot-hub.room", room.id); } catch {}
+      try { localStorage.setItem("qenbet.room", room.id); } catch {}
       firstRender = true;
       renderAll();
       closeDrawers();
@@ -197,7 +197,7 @@ function renderHeader() {
   document.querySelector("#add-room-button").disabled = selectedAttachments.length > 0;
   document.querySelector("#edit-room-button").disabled = selectedAttachments.length > 0;
   const pending = state.approvals.filter((approval) => approval.status === "pending").length;
-  document.title = `${pending ? `(${pending}) ` : ""}OpenBot Hub — ${room.name}`;
+  document.title = `${pending ? `(${pending}) ` : ""}Qenbet — ${room.name}`;
 }
 
 function operationDetail(container, label, value) {
@@ -744,7 +744,7 @@ document.querySelector("#room-form").addEventListener("submit", async (event) =>
     });
     document.querySelector("#room-dialog").close();
     currentRoomId = updated.id;
-    try { localStorage.setItem("openbot-hub.room", updated.id); } catch {}
+    try { localStorage.setItem("qenbet.room", updated.id); } catch {}
     firstRender = true;
     await refresh();
     showToast(id ? "Room updated." : "Room created.");
@@ -760,7 +760,7 @@ document.querySelector("#delete-room-button").addEventListener("click", async ()
     await api(`/api/rooms/${encodeURIComponent(id)}?confirm=delete-history`, { method: "DELETE" });
     document.querySelector("#room-dialog").close();
     currentRoomId = "army";
-    try { localStorage.setItem("openbot-hub.room", "army"); } catch {}
+    try { localStorage.setItem("qenbet.room", "army"); } catch {}
     firstRender = true;
     await refresh();
     showToast("Room and its history deleted.");

@@ -1,11 +1,11 @@
-# OpenBot Hub product requirements
+# Qenbet product requirements
 
 - **Document status:** Authoritative product baseline
 - **Version:** 1.1
 - **Date:** 2026-11-12
 - **Owner:** Mo
 
-This document defines what OpenBot Hub must become and what “full-feature ready” means. `docs/migration-plan.md` defines delivery order. `docs/requirements-matrix.md` tracks implementation and acceptance evidence.
+This document defines what Qenbet must become and what “full-feature ready” means. `docs/migration-plan.md` defines delivery order. `docs/requirements-matrix.md` tracks implementation and acceptance evidence.
 
 ## Change rule
 
@@ -15,11 +15,11 @@ Every acceptance report must record the commit SHA, the run date, the Node versi
 
 ## 1. Product definition
 
-OpenBot Hub is a private, account-free coordination application for Mo's agents across machines and harnesses.
+Qenbet is a private, account-free coordination application for Mo's agents across machines and harnesses.
 
 From one phone or desktop interface, Mo can assemble agents into rooms and teams, assign and supervise real work, exchange files, and trust that execution remains on the assigned machine and recovers safely.
 
-Upstream OpenBot is an architectural reference, not a runtime dependency. The product must not require email verification, a vendor account, hosted OpenBot services, Element, or Matrix.
+The product must not require email verification, a vendor account, hosted services, Element, or Matrix.
 
 ## 2. Primary user and core scenarios
 
@@ -64,7 +64,7 @@ Full-feature V1 requires every P0 and P1 requirement to be Done, followed by the
 - Secrets never enter Git, prompts, message history, or the agent registry.
 - Central paths and tools are never silently treated as remote paths and tools.
 - Payment, billing, hosted execution, user reporting, external analytics, and telemetry are excluded.
-- Complete OpenBot feature parity is not the V1 goal. Selected leads, task revisions, Continue/Reassign, and Archive/Restore are post-V1 unless separately approved; V1 coordination remains rooms, teams, controlled delegation, and synthesized results.
+- Complete multi-agent platform parity is not the V1 goal. Selected leads, task revisions, Continue/Reassign, and Archive/Restore are post-V1 unless separately approved; V1 coordination remains rooms, teams, controlled delegation, and synthesized results.
 - The server remains loopback-only until authenticated remote access is implemented.
 
 ## 5. Functional requirements
@@ -73,7 +73,7 @@ Full-feature V1 requires every P0 and P1 requirement to be Done, followed by the
 
 | ID | Priority | Requirement |
 |---|---|---|
-| CORE-01 | P0 | Provide one account-free responsive web application with no upstream OpenBot, email, vendor-account, or hosted-service dependency. |
+| CORE-01 | P0 | Provide one account-free responsive web application with no upstream dependency, email, vendor-account, or hosted-service dependency. |
 | CORE-02 | P0 | Run as a persistent Mac user service that starts at login and restarts after failure. |
 | CORE-03 | P1 | Persist rooms, registry data, messages, sessions, receipts, and execution state with tested migration and recovery behavior. |
 
@@ -161,7 +161,7 @@ Full-feature V1 requires every P0 and P1 requirement to be Done, followed by the
 
 ### Explicitly excluded from V1
 
-These OpenBot-parity features are deliberately outside V1. They stay excluded unless Mo approves a scope change, and recording them prevents "full-feature V1" from being claimed through omission.
+These platform-parity features are deliberately outside V1. They stay excluded unless Mo approves a scope change, and recording them prevents "full-feature V1" from being claimed through omission.
 
 | ID | Status | Requirement |
 |---|---|---|
@@ -236,4 +236,4 @@ The final release scenario is:
 9. Confirm no Element, vendor account, host switching, hidden Mini execution, telemetry, or billing flow was involved.
 10. Restore the deployment from backup in a separate acceptance run.
 
-Only when this scenario and every P0/P1 requirement pass can OpenBot Hub be called full-feature ready.
+Only when this scenario and every P0/P1 requirement pass can Qenbet be called full-feature ready.

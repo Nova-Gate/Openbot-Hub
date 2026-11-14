@@ -1,4 +1,4 @@
-# OpenBot Hub delivery roadmap
+# Qenbet delivery roadmap
 
 This roadmap sequences the requirements in `docs/product-requirements.md`. Status and evidence live in `docs/requirements-matrix.md`.
 

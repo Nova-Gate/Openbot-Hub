@@ -13,7 +13,7 @@ await mkdir(validationState, { recursive: true });
 const attachmentFixture = join(validationState, "browser attachment.txt");
 const attachmentContent = "Browser attachment proof: bytes arrived separately from the prompt.\n";
 await writeFile(attachmentFixture, attachmentContent);
-const profile = await mkdtemp(join(tmpdir(), "openbot-hub-chrome-"));
+const profile = await mkdtemp(join(tmpdir(), "qenbet-chrome-"));
 let dev;
 let chrome;
 let socket;
@@ -99,7 +99,7 @@ try {
     cwd: root,
     stdio: ["ignore", "pipe", "inherit"],
   });
-  const ready = await waitOutput(dev, "stdout", /"type":"openbot-hub\.ready","url":"([^"]+)"/);
+  const ready = await waitOutput(dev, "stdout", /"type":"qenbet\.ready","url":"([^"]+)"/);
   const url = ready[1];
 
   chrome = spawn("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", [

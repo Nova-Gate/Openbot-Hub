@@ -86,7 +86,7 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/api/state" && request.method === "GET") return json(response, 200, hub.snapshot());
     if (url.pathname === "/api/health" && request.method === "GET") {
-      return json(response, 200, { ok: true, product: "OpenBot Hub", accounts: false, externalAnalytics: false });
+      return json(response, 200, { ok: true, product: "Qenbet", accounts: false, externalAnalytics: false });
     }
     const roomAttachmentMatch = url.pathname.match(/^\/api\/rooms\/([^/]+)\/attachments$/);
     if (roomAttachmentMatch && request.method === "POST") {
@@ -191,14 +191,14 @@ const server = http.createServer(async (request, response) => {
 server.listen(port, host, () => {
   const address = server.address();
   const actualPort = typeof address === "object" && address ? address.port : port;
-  console.log(JSON.stringify({ type: "openbot-hub.ready", url: `http://${host}:${actualPort}/` }));
+  console.log(JSON.stringify({ type: "qenbet.ready", url: `http://${host}:${actualPort}/` }));
 });
 let stopping = false;
 const stop = async () => {
   if (stopping) return;
   stopping = true;
   const deadline = setTimeout(() => {
-    console.error(`OpenBot Hub shutdown exceeded ${shutdownDeadlineMs} ms; process cleanup or state persistence may be incomplete.`);
+    console.error(`Qenbet shutdown exceeded ${shutdownDeadlineMs} ms; process cleanup or state persistence may be incomplete.`);
     process.exit(1);
   }, shutdownDeadlineMs);
   let failure = null;
@@ -207,7 +207,7 @@ const stop = async () => {
     await hub.stop();
   } catch (error) {
     failure = error;
-    console.error(`OpenBot Hub shutdown failed: ${redactError(error.message)}`);
+    console.error(`Qenbet shutdown failed: ${redactError(error.message)}`);
   } finally {
     clearTimeout(deadline);
   }

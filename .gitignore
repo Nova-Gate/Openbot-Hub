@@ -22,7 +22,7 @@ out/
 runtime/
 .runtime/
 artifacts/
-.openbot-build/
+.qenbet-build/
 *.log
 *.pid
 *.db

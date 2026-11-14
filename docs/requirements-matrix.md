@@ -16,9 +16,9 @@ Every evidence entry must cite the commit SHA it ran against, the run date, and 
 - **DEC:** `node --test tests/approvals.test.mjs tests/elicitation.test.mjs` — native `elicitation/create` questions, complete/redacted operation details, permission allow/reject, question accept/decline/cancel, session binding, invalid/repeated decisions, expiry, waiting stop, active-modification guards, restart recovery, the persistence-decision race, and ACP process-group cleanup.
 - **CI:** `.github/workflows/test.yml` — runs CHECK and all offline tests for every PR and push to `main`; browser and live provider evidence remains local.
 - **UI:** `npm run test:ui` — isolated Chrome desktop and 390 px phone acceptance, including real file-input upload, hash/status chips, room locking, message metadata, exact downloads and fake-agent bytes, pending/completed tool and plan progress, raw command/output, failure rendering, node labels, visible permission command/path/diff details, and native question accept/decline flows; artifacts are written under ignored `artifacts/ui-validation/`.
-- **REAL:** `npm run test:opencode` — two small live OpenCode calls covering embedded-resource attachment reading with the marker absent from instruction text, exact native file evidence, a completed real file tool with result evidence and `mac-mini` attribution, zero replay duplicates, identity, lifecycle, isolated task artifacts, credential-field isolation, and native session resume after Hub restart; report under ignored `artifacts/opencode-acceptance/`.
+- **REAL:** `npm run test:opencode` — two small live OpenCode calls covering embedded-resource attachment reading with the marker absent from instruction text, exact native file evidence, a completed real file tool with result evidence and `mac-mini` attribution, zero replay duplicates, identity, lifecycle, isolated task artifacts, credential-field isolation, and native session resume after Hub restart; report under ignored `artifacts/opencode-acceptance/`. This evidence predates the 2026-11-12 rename; the change is string-only, so a rerun is pending.
 - **REAL-SUP:** `npm run test:opencode-supervision` — five small live calls proving native permission approval with complete operation details, a real OpenCode form question, active stop, induced provider failure, descendant cleanup, and post-failure recovery in the same native session; report under ignored `artifacts/opencode-supervision/`.
-- **SVC:** `launchctl print gui/$(id -u)/com.molaoshi.openbot-hub` plus health/state checks and an intentional `kickstart -k` restart.
+- **SVC:** `launchctl print gui/$(id -u)/com.molaoshi.qenbet` plus health/state checks and an intentional `kickstart -k` restart.
 
 `npm test` runs APP, PROG, ACP, FILE, SUP, DEC, and LIFE. UI requires macOS and Google Chrome. Future physical-phone, Dell, MacBook, security, and backup gates require their own recorded evidence; local simulation is not a substitute.
 
@@ -35,7 +35,7 @@ Every evidence entry must cite the commit SHA it ran against, the run date, and 
 
 | ID | Milestone | Status | Acceptance evidence |
 |---|---|---|---|
-| CORE-01 | M0 | Done | APP checks `accounts:false` and no external analytics flag; UI loads the complete app without sign-in or upstream OpenBot. |
+| CORE-01 | M0 | Done | APP checks `accounts:false` and no external analytics flag; UI loads the complete app without sign-in or an upstream platform. |
 | CORE-02 | M0 | Done | SVC verified running under launchd and automatically recovered after an intentional restart on 2026-11-02. |
 | CORE-03 | M5 | Partial | APP proves JSON state, fake-session restart, persisted execution records, and unfinished-to-unknown recovery; backup/restore remains. |
 
@@ -123,7 +123,7 @@ Every evidence entry must cite the commit SHA it ran against, the run date, and 
 
 ## Explicitly excluded from V1
 
-These OpenBot-parity features are deliberately outside V1. They stay excluded unless Mo approves a scope change, and recording them prevents "full-feature V1" from being claimed through omission.
+These platform-parity features are deliberately outside V1. They stay excluded unless Mo approves a scope change, and recording them prevents "full-feature V1" from being claimed through omission.
 
 | ID | Status | Reason |
 |---|---|---|
@@ -150,4 +150,4 @@ Gate for FILE-02 and M3: a green REAL-SUP run, then re-run LIFE and the real fil
 
 ## Current release conclusion
 
-OpenBot Hub is a verified local application with M2 active, not full-feature V1. The 2026-11-12 lifecycle change implements the EXEC-03 and EXEC-04 fixes and passes its offline gate, but both stay Partial until the live supervision gate passes on the installed CLI. All 38 offline tests pass, desktop and 390 px browser acceptance passes, and one real OpenCode adapter has passed five supervision calls plus the separate two-call file/session gate on CLI 2.0.26, covering native file and embedded-resource attachment delivery, identity, lifecycle, session resume, completed real tool progress with no replay duplicates, detailed permission, genuine form-question, stop/failure supervision, and descendant cleanup. FILE-01 is Done; FILE-02 generated-file return and the complete M2 exit gate remain open. Physical devices, other real harnesses, and production readiness must not be inferred from this local adapter or phone-sized-browser evidence.
+Qenbet is a verified local application with M2 active, not full-feature V1. The 2026-11-12 lifecycle change implements the EXEC-03 and EXEC-04 fixes and passes its offline gate, but both stay Partial until the live supervision gate passes on the installed CLI. All 38 offline tests pass, desktop and 390 px browser acceptance passes, and one real OpenCode adapter has passed five supervision calls plus the separate two-call file/session gate on CLI 2.0.26, covering native file and embedded-resource attachment delivery, identity, lifecycle, session resume, completed real tool progress with no replay duplicates, detailed permission, genuine form-question, stop/failure supervision, and descendant cleanup. FILE-01 is Done; FILE-02 generated-file return and the complete M2 exit gate remain open. Physical devices, other real harnesses, and production readiness must not be inferred from this local adapter or phone-sized-browser evidence.

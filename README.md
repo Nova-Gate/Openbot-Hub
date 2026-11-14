@@ -1,10 +1,10 @@
-# OpenBot Hub
+# Qenbet
 
 A private, account-free coordination app for Mo's agents across machines and harnesses.
 
 ## What this is
 
-OpenBot Hub is a custom local web application inspired by OpenBot's agent and ACP architecture. It does **not** install or launch upstream OpenBot and does not require email verification, a vendor account, hosted services, payment, billing, analytics, or telemetry.
+Qenbet is a custom local web application for coordinating agents over ACP. It does not require email verification, a vendor account, hosted services, payment, billing, analytics, or telemetry.
 
 One responsive application provides the global **Army** room plus focused project rooms. Agents keep their execution identity and run on their assigned machine: local agents connect directly, while remote agents use an authenticated ACP execution-node connector. The same interface works in desktop and phone browsers.
 
@@ -13,7 +13,7 @@ One responsive application provides the global **Army** room plus focused projec
 Requirements: Node.js 22 or newer. There are no package dependencies or API keys to install.
 
 ```sh
-cd /Users/immortalist/Documents/Kimi/Workspaces/MacServer/openbot-hub
+cd "$(git rev-parse --show-toplevel)"
 npm run dev
 ```
 
@@ -30,25 +30,25 @@ The demo Dell node currently runs on this Mac. It proves connector and execution
 
 ## Persistent Mac service
 
-OpenBot Hub is installed as the user LaunchAgent `com.molaoshi.openbot-hub`. It starts at login, restarts after failure, and serves `http://127.0.0.1:7100/` using `/opt/homebrew/bin/node`. Its configuration is stored at `~/Library/LaunchAgents/com.molaoshi.openbot-hub.plist`.
+Qenbet runs as the user LaunchAgent `com.molaoshi.qenbet`. It starts at login, restarts after failure, and serves `http://127.0.0.1:7100/` using `/opt/homebrew/bin/node`. The installed configuration lives at `~/Library/LaunchAgents/com.molaoshi.qenbet.plist`; [config/com.molaoshi.qenbet.plist.example](config/com.molaoshi.qenbet.plist.example) is the template, including a 25-second `ExitTimeOut` so shutdown cleanup is not cut short. Replace the placeholder paths before installing.
 
 ```sh
 # Restart after code or configuration changes
-launchctl kickstart -k "gui/$(id -u)/com.molaoshi.openbot-hub"
+launchctl kickstart -k "gui/$(id -u)/com.molaoshi.qenbet"
 
 # Stop the service
-launchctl bootout "gui/$(id -u)/com.molaoshi.openbot-hub"
+launchctl bootout "gui/$(id -u)/com.molaoshi.qenbet"
 
 # Start it again after stopping
-launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.molaoshi.openbot-hub.plist
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.molaoshi.qenbet.plist
 ```
 
-Service logs are written to `runtime/openbot-hub.out.log` and `runtime/openbot-hub.error.log`.
+Service logs are written to `runtime/qenbet.out.log` and `runtime/qenbet.error.log`.
 
 ## Manage agents, rooms, and execution
 
 - Select **+ ADD** in the execution directory to register a local-fake, OpenCode, or remote-ACP agent.
-- For **OpenCode · real ACP**, provide the full `opencode-cli` path and a disposable workspace. The Hub launches `opencode-cli acp`; it does not install upstream OpenBot or ask for an OpenBot account.
+- For **OpenCode · real ACP**, provide the full `opencode-cli` path and a disposable workspace. The Hub launches `opencode-cli acp`; it installs nothing and asks for no account.
 - Use **TEST** to check connectivity and expose available, unavailable, misconfigured, disabled, or untested health.
 - Use an agent's pencil control to edit its identity, connection, workspace, color, or enabled state. Execution changes invalidate the saved session reference.
 - Disabled agents cannot execute. Removing an agent preserves its message history.
@@ -108,6 +108,10 @@ tests/                   Offline protocol and application integration tests
 docs/                    Architecture and acceptance plans
 ```
 
+## Licence
+
+MIT. See [LICENSE](LICENSE).
+
 ## Boundaries
 
 - Army Hub is a separate repository and is not modified by this project.
@@ -115,6 +119,5 @@ docs/                    Architecture and acceptance plans
 - OpenCode is the first real adapter. DSH, Hermes, and Grok adapters are not implemented yet.
 - The disposable acceptance checks task artifacts within its isolated test root; it is not an operating-system sandbox and does not restrict OpenCode's own session/profile storage.
 - Physical Dell/MacBook enrollment and secure phone access remain deployment work.
-- Upstream OpenBot code is not bundled in the runnable app. Any future copied or modified upstream code must retain its PolyForm Noncommercial 1.0.0 notices.
 
-GitHub remote: `https://github.com/Nova-Gate/Openbot-Hub.git`. The repository-local credential helper uses the `github-pat-open-bot-hub` macOS Keychain entry; tokens and runtime files remain ignored.
+GitHub remote: configured under the `Nova-Gate` account; run `git remote -v` for the exact URL. The repository-local credential helper uses a macOS Keychain entry; tokens and runtime files remain ignored.

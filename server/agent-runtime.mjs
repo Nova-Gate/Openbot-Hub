@@ -64,10 +64,10 @@ export class AgentRuntime {
         command: process.execPath,
         args: [resolve(this.root, "connectors/remote-acp/fake-harness.mjs")],
         env: {
-          OPENBOT_HUB_NODE_ID: agent.nodeId,
-          OPENBOT_HUB_AGENT_TITLE: agent.name,
-          OPENBOT_HUB_WORKSPACE: resolve(this.root, agent.workspace),
-          OPENBOT_HUB_STATE_ROOT: resolve(this.root, agent.state),
+          QENBET_NODE_ID: agent.nodeId,
+          QENBET_AGENT_TITLE: agent.name,
+          QENBET_WORKSPACE: resolve(this.root, agent.workspace),
+          QENBET_STATE_ROOT: resolve(this.root, agent.state),
         },
       });
     }
